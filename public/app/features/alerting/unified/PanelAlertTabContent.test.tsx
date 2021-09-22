@@ -176,7 +176,7 @@ describe('PanelAlertTabContent', () => {
     const href = button.href;
     const match = href.match(/alerting\/new\?defaults=(.*)&returnTo=/);
     expect(match).toHaveLength(2);
-    const defaults = JSON.parse(decodeURIComponent(match![1]));
+    const defaults = JSON.parse(decodeQueryParam(match![1]));
     expect(defaults.queries[0].model).toEqual({
       expr: 'sum(some_metric [5m])) by (app)',
       refId: 'A',
@@ -198,7 +198,7 @@ describe('PanelAlertTabContent', () => {
     const href = button.href;
     const match = href.match(/alerting\/new\?defaults=(.*)&returnTo=/);
     expect(match).toHaveLength(2);
-    const defaults = JSON.parse(decodeURIComponent(match![1]));
+    const defaults = JSON.parse(decodeQueryParam(match![1]));
     expect(defaults.queries[0].model).toEqual({
       expr: 'sum(some_metric [7m])) by (app)',
       refId: 'A',
@@ -223,7 +223,7 @@ describe('PanelAlertTabContent', () => {
     const href = button.href;
     const match = href.match(/alerting\/new\?defaults=(.*)&returnTo=/);
     expect(match).toHaveLength(2);
-    const defaults = JSON.parse(decodeURIComponent(match![1]));
+    const defaults = JSON.parse(decodeQueryParam(match![1]));
     expect(defaults).toEqual({
       type: 'grafana',
       folder: { id: 1, title: 'super folder' },
@@ -271,3 +271,7 @@ describe('PanelAlertTabContent', () => {
     });
   });
 });
+
+function decodeQueryParam(p: string) {
+  return decodeURIComponent(p.replace(/\+/g, ' '));
+}

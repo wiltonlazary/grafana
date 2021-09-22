@@ -46,10 +46,10 @@ function toUrlParams(a: any) {
   const add = (k: string, v: any) => {
     v = typeof v === 'function' ? v() : v === null ? '' : v === undefined ? '' : v;
     if (typeof v !== 'boolean') {
-      s[s.length] = encodeURIComponentAsAngularJS(k, true) + '=' + encodeURIComponentAsAngularJS(v, true);
+      s[s.length] = encodeURIComponentAsAngularJS(k) + '=' + encodeURIComponentAsAngularJS(v);
     } else {
-      const valueQueryPart = v ? '' : '=' + encodeURIComponentAsAngularJS('false', true);
-      s[s.length] = encodeURIComponentAsAngularJS(k, true) + valueQueryPart;
+      const valueQueryPart = v ? '' : '=' + encodeURIComponentAsAngularJS('false');
+      s[s.length] = encodeURIComponentAsAngularJS(k) + valueQueryPart;
     }
   };
 
@@ -114,8 +114,8 @@ function getUrlSearchParams(): UrlQueryMap {
     const keyValuePair = p.split('=');
     if (keyValuePair.length > 1) {
       // key-value param
-      const key = decodeURIComponent(keyValuePair[0]);
-      const value = decodeURIComponent(keyValuePair[1]);
+      const key = decodeQueryParam(keyValuePair[0]);
+      const value = decodeQueryParam(keyValuePair[1]);
       if (key in params) {
         params[key] = [...(params[key] as any[]), value];
       } else {
@@ -123,11 +123,15 @@ function getUrlSearchParams(): UrlQueryMap {
       }
     } else if (keyValuePair.length === 1) {
       // boolean param
-      const key = decodeURIComponent(keyValuePair[0]);
+      const key = decodeQueryParam(keyValuePair[0]);
       params[key] = true;
     }
   }
   return params;
+}
+
+function decodeQueryParam(p: string) {
+  return decodeURIComponent(p.replace(/\+/g, ' '));
 }
 
 /**

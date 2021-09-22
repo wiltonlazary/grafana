@@ -225,7 +225,7 @@ describe('PanelModel', () => {
 
       it('should interpolate $__all_variables variable', () => {
         const out = model.replaceVariables(`/d/1?$${DataLinkBuiltInVars.includeVars}`);
-        expect(out).toBe('/d/1?var-test1=val1&var-test2=val2&var-test3=Value%203&var-test4=A&var-test4=B');
+        expect(out).toBe('/d/1?var-test1=val1&var-test2=val2&var-test3=Value+3&var-test4=A&var-test4=B');
       });
 
       it('should prefer the local variable value', () => {
