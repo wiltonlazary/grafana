@@ -197,6 +197,8 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
 
       // Ensure there is a valid key value pair with accurate types
       if (
+        token &&
+        lookupToken &&
         typeof token !== 'string' &&
         token.type === 'key' &&
         typeof token.content === 'string' &&
@@ -211,12 +213,19 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
     let tempoQuery = pick(query, ['minDuration', 'maxDuration', 'limit']);
     // Remove empty properties
     tempoQuery = pickBy(tempoQuery, identity);
+
     if (query.serviceName) {
       tagsQuery.push({ ['service.name']: query.serviceName });
     }
     if (query.spanName) {
       tagsQuery.push({ ['name']: query.spanName });
     }
+
+    // Set default limit
+    if (!tempoQuery.limit) {
+      tempoQuery.limit = 100;
+    }
+
     const tagsQueryObject = tagsQuery.reduce((tagQuery, item) => ({ ...tagQuery, ...item }), {});
     return { ...tagsQueryObject, ...tempoQuery };
   }

@@ -35,6 +35,7 @@ This is a configuration for the [trace to logs feature]({{< relref "../explore/t
 - **Span end time shift -** Shift in the end time for the Loki query based on the span end time. Time units can be used here, for example, 5s, 1m, 3h. The default is 0.
 - **Filter by Trace ID -** Toggle to append the trace ID to the Loki query.
 - **Filter by Span ID -** Toggle to append the span ID to the Loki query.
+- **Loki Search -** Toggle to enable searching for traces with this Loki data source.
 
 ![Trace to logs settings](/static/img/docs/explore/trace-to-logs-settings-8-2.png 'Screenshot of the trace to logs settings')
 

@@ -13,7 +13,7 @@ const durationMap: { [key in Required<keyof Duration>]: string[] } = {
 };
 
 /**
- * intervalToAbbreviatedDurationString convers interval to readable duration string
+ * intervalToAbbreviatedDurationString converts interval to readable duration string
  *
  * @param interval - interval to convert
  * @param includeSeconds - optional, default true. If false, will not include seconds unless interval is less than 1 minute
