@@ -24,6 +24,7 @@ steps:
   - curl -fLO https://github.com/jwilder/dockerize/releases/download/v$${DOCKERIZE_VERSION}/dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz
   - tar -C bin -xzvf dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz
   - rm dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz
+  - yarn install --frozen-lockfile --no-progress
   environment:
     DOCKERIZE_VERSION: 0.6.1
     YARN_CACHE_FOLDER: /cache/yarn
@@ -54,12 +55,17 @@ steps:
   settings:
     backend: gcs
     bucket: test-julien
-    cache_key: node_modules
+    cache_key: test123
     json_key:
       from_secret: tf_google_credentials
+    local_root: /cache
     mount:
+    - yarn
     - node_modules
     restore: true
+  volumes:
+  - name: cache
+    path: /cache
   depends_on:
   - clone
 
@@ -97,12 +103,17 @@ steps:
   settings:
     backend: gcs
     bucket: test-julien
-    cache_key: node_modules
+    cache_key: test123
     json_key:
       from_secret: tf_google_credentials
+    local_root: /cache
     mount:
+    - yarn
     - node_modules
     rebuild: true
+  volumes:
+  - name: cache
+    path: /cache
   when:
     event:
     - pull_request
@@ -167,6 +178,6 @@ get:
 
 ---
 kind: signature
-hmac: f3363551c7093dcb5b88e31aa4d3da7a261b0b02735e7ee319de3472cd49f00a
+hmac: cac8f3349c0d0a34f76a0c13dd08159ac776829ed96ec609fbe350422dda5f8e
 
 ...

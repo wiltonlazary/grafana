@@ -63,6 +63,7 @@ def initialize_step(edition, platform, ver_mode, is_downstream=False, install_de
             'curl -fLO https://github.com/jwilder/dockerize/releases/download/v$${DOCKERIZE_VERSION}/dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz',
             'tar -C bin -xzvf dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz',
             'rm dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz',
+            'yarn install --frozen-lockfile --no-progress',
         ])
     if edition in ('enterprise', 'enterprise2'):
         source_commit = ''
@@ -427,13 +428,21 @@ def restore_cache_step():
             'json_key': from_secret('tf_google_credentials'),
             'bucket': 'test-julien',
             'restore': 'true',
-            'cache_key': "node_modules",
+            'cache_key': "test123",
+            'local_root': '/cache',
             'mount': [
+                'yarn',
                 'node_modules'
             ],
          },
          'depends_on': [
             'clone'
+         ],
+         'volumes': [
+            {
+                'name': 'cache',
+                'path': '/cache',
+            },
          ],
     }
 
@@ -446,14 +455,22 @@ def rebuild_cache_step():
             'backend': 'gcs',
             'json_key': from_secret('tf_google_credentials'),
             'bucket': 'test-julien',
-            'cache_key': "node_modules",
+            'cache_key': "test123",
             'rebuild': 'true',
+            'local_root': '/cache',
             'mount': [
+                'yarn',
                 'node_modules'
             ],
          },
          'depends_on': [
             'build-frontend',
+         ],
+         'volumes': [
+            {
+               'name': 'cache',
+               'path': '/cache',
+            },
          ],
          'when': {
             'event': 'pull_request',
