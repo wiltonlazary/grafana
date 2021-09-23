@@ -6,15 +6,22 @@
                 "datasource": "-- Grafana --",
                 "hide": true,
                 "iconColor": "rgba(0, 211, 255, 1)",
-                "name": "Annotations \u0026 Alerts"
+                "name": "Annotations \u0026 Alerts",
+                "showIn": 0,
+                "type": "dashboard"
             }
         ]
     },
+    "editable": true,
+    "graphTooltip": 0,
     "id": 3151,
     "links": [],
     "panels": [
         {
             "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
             "datasource": "gdev-opentsdb-v2.3",
             "fieldConfig": {
                 "defaults": {
@@ -30,6 +37,7 @@
                 "x": 0,
                 "y": 0
             },
+            "hiddenSeries": false,
             "id": 2,
             "legend": {
                 "avg": false,
@@ -42,13 +50,19 @@
             },
             "lines": true,
             "linewidth": 1,
+            "nullPointMode": "null",
             "options": {
                 "alertThreshold": true
             },
+            "percentage": false,
             "pluginVersion": "8.1.0-pre",
             "pointradius": 2,
+            "points": false,
             "renderer": "flot",
             "seriesOverrides": [],
+            "spaceLength": 10,
+            "stack": false,
+            "steppedLine": false,
             "targets": [
                 {
                     "aggregator": "sum",
@@ -78,7 +92,9 @@
             "timeRegions": [],
             "title": "CPU per host",
             "tooltip": {
-                "shared": true
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
             },
             "type": "graph",
             "xaxis": {
@@ -104,6 +120,9 @@
         },
         {
             "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
             "datasource": "gdev-opentsdb-v2.3",
             "fieldConfig": {
                 "defaults": {
@@ -119,6 +138,7 @@
                 "x": 12,
                 "y": 0
             },
+            "hiddenSeries": false,
             "id": 4,
             "legend": {
                 "avg": false,
@@ -131,13 +151,19 @@
             },
             "lines": true,
             "linewidth": 1,
+            "nullPointMode": "null",
             "options": {
                 "alertThreshold": true
             },
+            "percentage": false,
             "pluginVersion": "8.1.0-pre",
             "pointradius": 2,
+            "points": false,
             "renderer": "flot",
             "seriesOverrides": [],
+            "spaceLength": 10,
+            "stack": false,
+            "steppedLine": false,
             "targets": [
                 {
                     "aggregator": "sum",
@@ -164,7 +190,9 @@
             "timeRegions": [],
             "title": "Login Count per host",
             "tooltip": {
-                "shared": true
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
             },
             "type": "graph",
             "xaxis": {
@@ -189,15 +217,33 @@
             }
         }
     ],
+    "schemaVersion": 30,
     "style": "dark",
     "tags": [],
     "templating": {
         "list": []
     },
     "time": {
-        "from": "now-1h"
+        "from": "now-1h",
+        "to": "now"
     },
-    "timepicker": {},
+    "timepicker": {
+        "collapse": false,
+        "enable": true,
+        "hidden": false,
+        "refresh_intervals": [
+            "5s",
+            "10s",
+            "30s",
+            "1m",
+            "5m",
+            "15m",
+            "30m",
+            "1h",
+            "2h",
+            "1d"
+        ]
+    },
     "timezone": "",
     "title": "Datasource tests - OpenTSDB v2.3",
     "uid": "rZRUGik7k",

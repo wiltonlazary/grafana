@@ -221,17 +221,18 @@ func TestDevenvDashboardTrimApplyDefaults(t *testing.T) {
 					require.NoError(t, err)
 
 					// store the trimmed result into testdata for easy debug
-					// file, _ := os.Create(filepath.Join("testdata", filepath.Base(path)))
-					// defer file.Close()
-					// var jsonMap map[string]interface{}
-					// json.Unmarshal([]byte(trimmed.Value.(string)), &jsonMap)
-					// jdata, err := json.MarshalIndent(jsonMap, "", "    ")
-					// require.NoError(t, err)
-					// file.Write(jdata)
 
 					out, err := schema.ApplyDefaults(schema.Resource{Value: trimmed.Value.(string)}, dsSchema.CUE())
+					file, _ := os.Create(filepath.Join("testdata", filepath.Base(path)))
+					defer file.Close()
+					var jsonMap map[string]interface{}
+					json.Unmarshal([]byte(out.Value.(string)), &jsonMap)
+					jdata, err := json.MarshalIndent(jsonMap, "", "    ")
+					require.NoError(t, err)
+					file.Write(jdata)
 					require.NoError(t, err)
 					require.JSONEq(t, string(byt), out.Value.(string))
+
 				})
 				return nil
 			}))
