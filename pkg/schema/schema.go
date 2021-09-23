@@ -2,11 +2,9 @@ package schema
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/bits"
-	"os"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -305,6 +303,7 @@ func applyDefaultHelper(input cue.Value, scue cue.Value) (cue.Value, error) {
 	case cue.ListKind:
 		// if list element exist
 		ele := scue.LookupPath(cue.MakePath(cue.AnyIndex))
+
 		// if input is not a concrete list, we must have list elements exist to be used to trim defaults
 		if ele.Exists() {
 			if ele.IncompleteKind() == cue.BottomKind {
@@ -398,8 +397,8 @@ func TrimDefaults(r Resource, scue cue.Value) (Resource, error) {
 	}
 	re, err := convertCUEValueToString(rv)
 
-	v, _ := json.MarshalIndent(re, "", "    ")
-	_ = os.WriteFile("/tmp/dat1", v, 0644)
+	// v, _ := json.MarshalIndent(re, "", "    ")
+	// _ = os.WriteFile("/tmp/dat1", v, 0644)
 
 	if err != nil {
 		return r, err
@@ -407,16 +406,18 @@ func TrimDefaults(r Resource, scue cue.Value) (Resource, error) {
 	return Resource{Value: re}, nil
 }
 
-func isCueValueEqual(inputdef cue.Value, input cue.Value) bool {
-	d, exist := inputdef.Default()
+func getDefault(icue cue.Value) (cue.Value, bool) {
+	d, exist := icue.Default()
 	if exist && d.Kind() == cue.ListKind {
+		lb, _ := d.Label()
 		len, err := d.Len().Int64()
+		fmt.Println("..................The list default exist: ", exist, lb, len)
 		if err != nil {
-			return false
+			return d, false
 		}
 		var defaultExist bool
 		if len <= 0 {
-			op, vals := inputdef.Expr()
+			op, vals := icue.Expr()
 			if op == cue.OrOp {
 				for _, val := range vals {
 					vallen, _ := val.Len().Int64()
@@ -433,6 +434,11 @@ func isCueValueEqual(inputdef cue.Value, input cue.Value) bool {
 			}
 		}
 	}
+	return d, exist
+}
+
+func isCueValueEqual(inputdef cue.Value, input cue.Value) bool {
+	d, exist := getDefault(inputdef)
 	if exist {
 		return input.Subsume(d) == nil && d.Subsume(input) == nil
 	}

@@ -221,18 +221,17 @@ func TestDevenvDashboardTrimApplyDefaults(t *testing.T) {
 					require.NoError(t, err)
 
 					// store the trimmed result into testdata for easy debug
-
 					out, err := schema.ApplyDefaults(schema.Resource{Value: trimmed.Value.(string)}, dsSchema.CUE())
 					require.NoError(t, err)
 
-					file, _ := os.Create(filepath.Join("testdata", filepath.Base(path)))
-					defer file.Close()
-					var jsonMap map[string]interface{}
-					json.Unmarshal([]byte(out.Value.(string)), &jsonMap)
-					jdata, err := json.MarshalIndent(jsonMap, "", "  ")
-					require.NoError(t, err)
-					file.Write(jdata)
-					require.NoError(t, err)
+					// file, _ := os.Create(filepath.Join("testdata", filepath.Base(path)))
+					// defer file.Close()
+					// var jsonMap map[string]interface{}
+					// json.Unmarshal([]byte(out.Value.(string)), &jsonMap)
+					// jdata, err := json.MarshalIndent(jsonMap, "", "  ")
+					// require.NoError(t, err)
+					// file.Write(jdata)
+					// require.NoError(t, err)
 					require.JSONEq(t, string(byt), out.Value.(string))
 
 				})
@@ -247,11 +246,3 @@ func TestDevenvDashboardTrimApplyDefaults(t *testing.T) {
 	require.NoError(t, err, "error while loading dist dashboard scuemata")
 	t.Run("dist", doTest(ddash))
 }
-
-// func JSONMarshal(t interface{}) ([]byte, error) {
-// 	buffer := &bytes.Buffer{}
-// 	encoder := json.NewEncoder(buffer)
-// 	encoder.SetEscapeHTML(false)
-// 	err := encoder.Encode(t)
-// 	return buffer.Bytes(), err
-// }
