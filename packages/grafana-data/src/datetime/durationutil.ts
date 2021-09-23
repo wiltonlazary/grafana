@@ -85,3 +85,26 @@ export function durationToMilliseconds(duration: Duration): number {
 export function isValidDate(dateString: string): boolean {
   return !isNaN(Date.parse(dateString));
 }
+
+/**
+ * isValidDuration returns true if the given string can be parsed into a valid Duration object, false otherwise
+ *
+ * @param durationString - string representation of a duration
+ *
+ * @public
+ */
+export function isValidDuration(durationString: string): boolean {
+  for (const value of durationString.trim().split(' ')) {
+    const match = value.match(/(\d+)(.+)/);
+    if (match === null || match.length !== 3) {
+      return false;
+    }
+
+    const key = Object.entries(durationMap).find(([_, abbreviations]) => abbreviations?.includes(match[2]))?.[0];
+    if (!key) {
+      return false;
+    }
+  }
+
+  return true;
+}

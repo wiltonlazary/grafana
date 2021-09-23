@@ -7,6 +7,7 @@ import {
   DataSourceApi,
   DataSourceInstanceSettings,
   DataSourceJsonData,
+  isValidDuration,
   LoadingState,
 } from '@grafana/data';
 import { TraceToLogsOptions } from 'app/core/components/TraceToLogsSettings';
@@ -102,16 +103,20 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
     }
 
     if (targets.nativeSearch?.length) {
-      const searchQuery = this.buildSearchQuery(targets.nativeSearch[0]);
-      subQueries.push(
-        this._request('/api/search', searchQuery).pipe(
-          map((response) => {
-            return {
-              data: [createTableFrameFromSearch(response.data.traces, this.instanceSettings)],
-            };
-          })
-        )
-      );
+      try {
+        const searchQuery = this.buildSearchQuery(targets.nativeSearch[0]);
+        subQueries.push(
+          this._request('/api/search', searchQuery).pipe(
+            map((response) => {
+              return {
+                data: [createTableFrameFromSearch(response.data.traces, this.instanceSettings)],
+              };
+            })
+          )
+        );
+      } catch (error) {
+        return of({ error: { message: error.message }, data: [] });
+      }
     }
 
     if (targets.upload?.length) {
@@ -224,6 +229,17 @@ export class TempoDatasource extends DataSourceWithBackend<TempoQuery, TempoJson
     // Set default limit
     if (!tempoQuery.limit) {
       tempoQuery.limit = 100;
+    }
+
+    // Validate query inputs
+    if (tempoQuery.minDuration && !isValidDuration(tempoQuery.minDuration)) {
+      throw new Error('Please enter a valid min duration.');
+    }
+    if (tempoQuery.maxDuration && !isValidDuration(tempoQuery.maxDuration)) {
+      throw new Error('Please enter a valid max duration.');
+    }
+    if (!Number.isInteger(tempoQuery.limit) || tempoQuery.limit <= 0) {
+      throw new Error('Please enter a valid limit.');
     }
 
     const tagsQueryObject = tagsQuery.reduce((tagQuery, item) => ({ ...tagQuery, ...item }), {});

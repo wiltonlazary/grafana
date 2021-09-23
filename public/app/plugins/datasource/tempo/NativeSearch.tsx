@@ -14,7 +14,7 @@ import { tokenizer } from './syntax';
 import Prism from 'prismjs';
 import { Node } from 'slate';
 import { css } from '@emotion/css';
-import { SelectableValue } from '@grafana/data';
+import { isValidDuration, SelectableValue } from '@grafana/data';
 import TempoLanguageProvider from './language_provider';
 import { TempoDatasource, TempoQuery } from './datasource';
 import { debounce } from 'lodash';
@@ -53,6 +53,7 @@ const NativeSearch = ({ datasource, query, onChange, onBlur, onRunQuery }: Props
     spanNameOptions: [],
     selectedSpanName: undefined,
   });
+  const [validation, setValidation] = useState<{ [key: string]: boolean }>({});
 
   const fetchServiceNameOptions = useMemo(
     () =>
@@ -170,10 +171,17 @@ const NativeSearch = ({ datasource, query, onChange, onBlur, onRunQuery }: Props
         </InlineField>
       </InlineFieldRow>
       <InlineFieldRow>
-        <InlineField label="Min Duration" labelWidth={14} grow>
+        <InlineField label="Min Duration" invalid={!!validation.minDuration} labelWidth={14} grow>
           <Input
             value={query.minDuration || ''}
             placeholder={durationPlaceholder}
+            onBlur={() => {
+              if (query.minDuration && !isValidDuration(query.minDuration)) {
+                setValidation({ ...validation, minDuration: true });
+              } else {
+                setValidation({ ...validation, minDuration: false });
+              }
+            }}
             onChange={(v) =>
               onChange({
                 ...query,
@@ -185,10 +193,17 @@ const NativeSearch = ({ datasource, query, onChange, onBlur, onRunQuery }: Props
         </InlineField>
       </InlineFieldRow>
       <InlineFieldRow>
-        <InlineField label="Max Duration" labelWidth={14} grow>
+        <InlineField label="Max Duration" invalid={!!validation.maxDuration} labelWidth={14} grow>
           <Input
             value={query.maxDuration || ''}
             placeholder={durationPlaceholder}
+            onBlur={() => {
+              if (query.maxDuration && !isValidDuration(query.maxDuration)) {
+                setValidation({ ...validation, maxDuration: true });
+              } else {
+                setValidation({ ...validation, maxDuration: false });
+              }
+            }}
             onChange={(v) =>
               onChange({
                 ...query,
@@ -200,16 +215,29 @@ const NativeSearch = ({ datasource, query, onChange, onBlur, onRunQuery }: Props
         </InlineField>
       </InlineFieldRow>
       <InlineFieldRow>
-        <InlineField label="Limit" labelWidth={14} grow tooltip="Maximum numbers of returned results. Defaults to 100.">
+        <InlineField
+          label="Limit"
+          invalid={!!validation.limit}
+          labelWidth={14}
+          grow
+          tooltip="Maximum numbers of returned results. Defaults to 100."
+        >
           <Input
             value={query.limit || ''}
             type="number"
-            onChange={(v) =>
+            onChange={(v) => {
+              let limit = v.currentTarget.value ? parseInt(v.currentTarget.value, 10) : undefined;
+              if (limit && (!Number.isInteger(limit) || limit <= 0)) {
+                setValidation({ ...validation, limit: true });
+              } else {
+                setValidation({ ...validation, limit: false });
+              }
+
               onChange({
                 ...query,
-                limit: v.currentTarget.value ? parseInt(v.currentTarget.value, 10) : undefined,
-              })
-            }
+                limit,
+              });
+            }}
             onKeyDown={onKeyDown}
           />
         </InlineField>
