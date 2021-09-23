@@ -223,11 +223,13 @@ func TestDevenvDashboardTrimApplyDefaults(t *testing.T) {
 					// store the trimmed result into testdata for easy debug
 
 					out, err := schema.ApplyDefaults(schema.Resource{Value: trimmed.Value.(string)}, dsSchema.CUE())
+					require.NoError(t, err)
+
 					file, _ := os.Create(filepath.Join("testdata", filepath.Base(path)))
 					defer file.Close()
 					var jsonMap map[string]interface{}
 					json.Unmarshal([]byte(out.Value.(string)), &jsonMap)
-					jdata, err := json.MarshalIndent(jsonMap, "", "    ")
+					jdata, err := json.MarshalIndent(jsonMap, "", "  ")
 					require.NoError(t, err)
 					file.Write(jdata)
 					require.NoError(t, err)

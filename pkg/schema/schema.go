@@ -320,7 +320,7 @@ func applyDefaultHelper(input cue.Value, scue cue.Value) (cue.Value, error) {
 				if err != nil {
 					return input, err
 				}
-				re, err := applyDefaultHelper(ref, iter.Value())
+				re, err := applyDefaultHelper(iter.Value(), ref)
 				if err == nil {
 					reString, err := convertCUEValueToString(re)
 					if err != nil {
