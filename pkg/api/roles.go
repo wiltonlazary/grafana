@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+
 	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 )
@@ -14,21 +16,27 @@ const (
 	ActionDatasourcesWrite  = "datasources:write"
 	ActionDatasourcesDelete = "datasources:delete"
 	ActionDatasourcesIDRead = "datasources:id:read"
+
+	ActionOrgsRead = "orgs:read"
 )
 
 // API related scopes
-const (
-	ScopeProvisionersAll           = "provisioners:*"
-	ScopeProvisionersDashboards    = "provisioners:dashboards"
-	ScopeProvisionersPlugins       = "provisioners:plugins"
-	ScopeProvisionersDatasources   = "provisioners:datasources"
-	ScopeProvisionersNotifications = "provisioners:notifications"
+var (
+	ScopeProvisionersAll           = accesscontrol.Scope("provisioners", "*")
+	ScopeProvisionersDashboards    = accesscontrol.Scope("provisioners", "dashboards")
+	ScopeProvisionersPlugins       = accesscontrol.Scope("provisioners", "plugins")
+	ScopeProvisionersDatasources   = accesscontrol.Scope("provisioners", "datasources")
+	ScopeProvisionersNotifications = accesscontrol.Scope("provisioners", "notifications")
 
-	ScopeDatasourcesAll = `datasources:*`
-	ScopeDatasourceID   = `datasources:id:{{ index . ":id" }}`
-	ScopeDatasourceUID  = `datasources:uid:{{ index . ":uid" }}`
-	ScopeDatasourceName = `datasources:name:{{ index . ":name" }}`
+	ScopeDatasourcesAll = accesscontrol.Scope("datasources", "*")
+	ScopeDatasourceID   = accesscontrol.Scope("datasources", "id", accesscontrol.Parameter(":id"))
+	ScopeDatasourceUID  = accesscontrol.Scope("datasources", "uid", accesscontrol.Parameter(":uid"))
+	ScopeDatasourceName = accesscontrol.Scope("datasources", "name", accesscontrol.Parameter(":name"))
+
+	ScopeOrgsID = accesscontrol.Scope("orgs", accesscontrol.Parameter(":orgId"))
 )
+
+func buildOrgsIdScope(orgID int64) string { return fmt.Sprintf("orgs:%v", orgID) }
 
 // declareFixedRoles declares to the AccessControl service fixed roles and their
 // grants to organization roles ("Viewer", "Editor", "Admin") or "Grafana Admin"

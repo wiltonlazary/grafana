@@ -3,24 +3,27 @@ package api
 import (
 	"errors"
 
+	macaron "gopkg.in/macaron.v1"
+
 	"github.com/grafana/grafana/pkg/api/dtos"
 	"github.com/grafana/grafana/pkg/api/response"
 	"github.com/grafana/grafana/pkg/bus"
 	"github.com/grafana/grafana/pkg/infra/metrics"
 	"github.com/grafana/grafana/pkg/models"
+	"github.com/grafana/grafana/pkg/services/accesscontrol"
+	"github.com/grafana/grafana/pkg/services/sqlstore"
 	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/util"
-	macaron "gopkg.in/macaron.v1"
 )
 
 // GET /api/org
-func GetOrgCurrent(c *models.ReqContext) response.Response {
-	return getOrgHelper(c.OrgId)
+func (hs *HTTPServer) GetCurrentOrg(c *models.ReqContext) response.Response {
+	return hs.getOrgHelper(c, c.OrgId)
 }
 
 // GET /api/orgs/:orgId
-func GetOrgByID(c *models.ReqContext) response.Response {
-	return getOrgHelper(c.ParamsInt64(":orgId"))
+func (hs *HTTPServer) GetOrgByID(c *models.ReqContext) response.Response {
+	return hs.getOrgHelper(c, c.ParamsInt64(":orgId"))
 }
 
 // Get /api/orgs/name/:name
@@ -49,10 +52,15 @@ func (hs *HTTPServer) GetOrgByName(c *models.ReqContext) response.Response {
 	return response.JSON(200, &result)
 }
 
-func getOrgHelper(orgID int64) response.Response {
+func (hs *HTTPServer) getOrgHelper(c *models.ReqContext, orgID int64) response.Response {
+	hasAccess := accesscontrol.HasAccess(hs.AccessControl, c)
+	if !hasAccess(accesscontrol.NoReq, accesscontrol.EvalPermission(ActionOrgsRead, buildOrgsIdScope(c.OrgId))) {
+		return response.Error(403, "Access denied to org", nil)
+	}
+
 	query := models.GetOrgByIdQuery{Id: orgID}
 
-	if err := bus.Dispatch(&query); err != nil {
+	if err := sqlstore.GetOrgById(&query); err != nil {
 		if errors.Is(err, models.ErrOrgNotFound) {
 			return response.Error(404, "Organization not found", err)
 		}
