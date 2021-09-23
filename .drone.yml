@@ -24,6 +24,7 @@ steps:
   - curl -fLO https://github.com/jwilder/dockerize/releases/download/v$${DOCKERIZE_VERSION}/dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz
   - tar -C bin -xzvf dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz
   - rm dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz
+  - yarn install --frozen-lockfile --no-progress
   environment:
     DOCKERIZE_VERSION: 0.6.1
     YARN_CACHE_FOLDER: /cache/yarn
@@ -48,23 +49,36 @@ steps:
   depends_on:
   - initialize
 
-- name: restore-cache
+- name: restore-cache-yarn
   pull: always
   image: jduchesnegrafana/drone-cache:v1.2.0-rc0-dirtytest
   settings:
     backend: gcs
     bucket: test-julien
-    cache_key: test123
+    cache_key: yarn
     json_key:
       from_secret: tf_google_credentials
     local_root: /cache
     mount:
     - yarn
-    - node_modules
     restore: true
   volumes:
   - name: cache
     path: /cache
+  depends_on:
+  - clone
+
+- name: restore-cache-node-modules
+  pull: always
+  image: jduchesnegrafana/drone-cache:v1.2.0-rc0-dirtytest
+  settings:
+    backend: gcs
+    bucket: test-julien
+    json_key:
+      from_secret: tf_google_credentials
+    mount:
+    - node_modules
+    restore: true
   depends_on:
   - clone
 
@@ -96,23 +110,39 @@ steps:
   depends_on:
   - test-frontend
 
-- name: rebuild-cache
+- name: rebuild-cache-yarn
   pull: always
   image: jduchesnegrafana/drone-cache:v1.2.0-rc0-dirtytest
   settings:
     backend: gcs
     bucket: test-julien
-    cache_key: test123
+    cache_key: yarn
     json_key:
       from_secret: tf_google_credentials
     local_root: /cache
     mount:
     - yarn
-    - node_modules
     rebuild: true
   volumes:
   - name: cache
     path: /cache
+  when:
+    event:
+    - pull_request
+  depends_on:
+  - build-frontend
+
+- name: rebuild-cache-node-modules
+  pull: always
+  image: jduchesnegrafana/drone-cache:v1.2.0-rc0-dirtytest
+  settings:
+    backend: gcs
+    bucket: test-julien
+    json_key:
+      from_secret: tf_google_credentials
+    mount:
+    - node_modules
+    rebuild: true
   when:
     event:
     - pull_request
@@ -177,6 +207,6 @@ get:
 
 ---
 kind: signature
-hmac: 40604204762f2895fee2da2a5e278c97e2bd1f64739d6c7f9efdeda3a5fc6c90
+hmac: 80864de5224735a7895ed52ee4987993d8727fea13f4294b250b77638380c64f
 
 ...

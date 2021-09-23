@@ -47,11 +47,13 @@ def pr_pipelines(edition):
     steps = [
         codespell_step(),
         shellcheck_step(),
-        restore_cache_step(),
+        restore_cache_step('yarn'),
+        restore_cache_step('node_modules'),
         lint_backend_step(edition=edition),
         test_frontend_step(),
         build_frontend_step(edition=edition, ver_mode=ver_mode),
-        rebuild_cache_step(),
+        rebuild_cache_step('yarn'),
+        rebuild_cache_step('node_modules'),
     ]
 
     trigger = {

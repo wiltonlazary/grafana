@@ -63,6 +63,7 @@ def initialize_step(edition, platform, ver_mode, is_downstream=False, install_de
             'curl -fLO https://github.com/jwilder/dockerize/releases/download/v$${DOCKERIZE_VERSION}/dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz',
             'tar -C bin -xzvf dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz',
             'rm dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz',
+            'yarn install --frozen-lockfile --no-progress',
         ])
     if edition in ('enterprise', 'enterprise2'):
         source_commit = ''
@@ -417,60 +418,72 @@ def test_frontend_step():
     }
 
 
-def restore_cache_step():
+def restore_cache_step(cache):
+    name = ''
+    cache_key = ''
+    local_root = ''
+    volumes = []
+    mount = []
+    if cache == 'yarn':
+        name = 'restore-cache-yarn'
+        cache_key = 'yarn'
+        local_root = '/cache'
+        volumes = [{'name': 'cache', 'path': '/cache',},]
+        mount = ['yarn']
+    else:
+        name = 'restore-cache-node-modules'
+        mount = ['node_modules']
     return {
         'image': 'jduchesnegrafana/drone-cache:v1.2.0-rc0-dirtytest',
-        'name': 'restore-cache',
+        'name': name,
         'pull': 'always',
          'settings': {
             'backend': 'gcs',
             'json_key': from_secret('tf_google_credentials'),
             'bucket': 'test-julien',
             'restore': 'true',
-            'cache_key': "test123",
-            'local_root': '/cache',
-            'mount': [
-                'yarn',
-                'node_modules'
-            ],
+            'cache_key': cache_key,
+            'local_root': local_root,
+            'mount': mount
          },
          'depends_on': [
             'clone'
          ],
-         'volumes': [
-            {
-                'name': 'cache',
-                'path': '/cache',
-            },
-         ],
+         'volumes': volumes,
     }
 
-def rebuild_cache_step():
+def rebuild_cache_step(cache):
+    name = ''
+    cache_key = ''
+    local_root = ''
+    volumes = []
+    mount = []
+    if cache == 'yarn':
+        name = 'rebuild-cache-yarn'
+        cache_key = 'yarn'
+        local_root = '/cache'
+        volumes = [{'name': 'cache', 'path': '/cache',},]
+        mount = ['yarn']
+    else:
+        name = 'rebuild-cache-node-modules'
+        mount = ['node_modules']
     return {
         'image': 'jduchesnegrafana/drone-cache:v1.2.0-rc0-dirtytest',
-        'name': 'rebuild-cache',
+        'name': name,
         'pull': 'always',
          'settings': {
             'backend': 'gcs',
             'json_key': from_secret('tf_google_credentials'),
             'bucket': 'test-julien',
-            'cache_key': "test123",
             'rebuild': 'true',
-            'local_root': '/cache',
-            'mount': [
-                'yarn',
-                'node_modules'
-            ],
+            'cache_key': cache_key,
+            'local_root': local_root,
+            'mount': mount
          },
          'depends_on': [
             'build-frontend',
          ],
-         'volumes': [
-            {
-               'name': 'cache',
-               'path': '/cache',
-            },
-         ],
+         'volumes': volumes,
          'when': {
             'event': 'pull_request',
          },
