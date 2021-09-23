@@ -98,8 +98,8 @@ steps:
     TEST_MAX_WORKERS: 50%
     YARN_CACHE_FOLDER: /cache/yarn
   depends_on:
-  - rebuild-cache-yarn
-  - rebuild-cache-node-modules
+  - restore-cache-yarn
+  - restore-cache-node-modules
   - initialize
 
 - name: build-frontend
@@ -208,6 +208,6 @@ get:
 
 ---
 kind: signature
-hmac: c73864d9cddb199638e5bd16613e66bfe64c405bf4fc9449dad81709676ec64b
+hmac: 6edcf7b84f7511aac6122380b560be8d1bca003a522fdc16cd28004cc185d7c1
 
 ...

@@ -405,8 +405,8 @@ def test_frontend_step():
         'name': 'test-frontend',
         'image': build_image,
         'depends_on': [
-            'rebuild-cache-yarn',
-            'rebuild-cache-node-modules',
+            'restore-cache-yarn',
+            'restore-cache-node-modules',
             'initialize'
         ],
         'environment': {
