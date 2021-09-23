@@ -24,6 +24,7 @@ steps:
   - curl -fLO https://github.com/jwilder/dockerize/releases/download/v$${DOCKERIZE_VERSION}/dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz
   - tar -C bin -xzvf dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz
   - rm dockerize-linux-amd64-v$${DOCKERIZE_VERSION}.tar.gz
+  - yarn install --frozen-lockfile --no-progress
   environment:
     DOCKERIZE_VERSION: 0.6.1
     YARN_CACHE_FOLDER: /cache/yarn
@@ -207,6 +208,6 @@ get:
 
 ---
 kind: signature
-hmac: da8b8d26c723c434aca0b7591864fb6e6e73873f3897a9f56892997f788e06ed
+hmac: 6edcf7b84f7511aac6122380b560be8d1bca003a522fdc16cd28004cc185d7c1
 
 ...
