@@ -33,7 +33,8 @@ var (
 	ScopeDatasourceUID  = accesscontrol.Scope("datasources", "uid", accesscontrol.Parameter(":uid"))
 	ScopeDatasourceName = accesscontrol.Scope("datasources", "name", accesscontrol.Parameter(":name"))
 
-	ScopeOrgsID = accesscontrol.Scope("orgs", accesscontrol.Parameter(":orgId"))
+	ScopeOrgsAll = accesscontrol.Scope("orgs", "*")
+	ScopeOrgsID  = accesscontrol.Scope("orgs", accesscontrol.Parameter(":orgId"))
 )
 
 func buildOrgsIdScope(orgID int64) string { return fmt.Sprintf("orgs:%v", orgID) }

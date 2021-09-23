@@ -24,7 +24,7 @@ func (hs *HTTPServer) getOrgQuotasHelper(c *models.ReqContext, orgID int64) resp
 		return response.Error(403, "Access denied to org", nil)
 	}
 
-	if !setting.Quota.Enabled {
+	if !hs.Cfg.Quota.Enabled {
 		return response.Error(404, "Quotas not enabled", nil)
 	}
 	query := models.GetOrgQuotasQuery{OrgId: orgID}
