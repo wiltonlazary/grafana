@@ -428,20 +428,13 @@ def restore_cache_step():
             'json_key': from_secret('tf_google_credentials'),
             'bucket': 'test-julien',
             'restore': 'true',
-            'cache_key': "test123",
-            'local_root': '/cache',
+            'cache_key': "node_modules",
             'mount': [
-                'yarn'
+                'node_modules'
             ],
          },
          'depends_on': [
             'clone'
-         ],
-         'volumes': [
-            {
-                'name': 'cache',
-                'path': '/cache',
-            },
          ],
     }
 
@@ -454,21 +447,14 @@ def rebuild_cache_step():
             'backend': 'gcs',
             'json_key': from_secret('tf_google_credentials'),
             'bucket': 'test-julien',
-            'cache_key': "test123",
+            'cache_key': "node_modules",
             'rebuild': 'true',
-            'local_root': '/cache',
             'mount': [
-                'yarn'
+                'node_modules'
             ],
          },
          'depends_on': [
-            'initialize',
-         ],
-         'volumes': [
-            {
-               'name': 'cache',
-               'path': '/cache',
-            },
+            'build-frontend',
          ],
          'when': {
             'event': 'pull_request',

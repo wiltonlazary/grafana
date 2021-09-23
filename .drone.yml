@@ -55,16 +55,12 @@ steps:
   settings:
     backend: gcs
     bucket: test-julien
-    cache_key: test123
+    cache_key: node_modules
     json_key:
       from_secret: tf_google_credentials
-    local_root: /cache
     mount:
-    - yarn
+    - node_modules
     restore: true
-  volumes:
-  - name: cache
-    path: /cache
   depends_on:
   - clone
 
@@ -102,21 +98,17 @@ steps:
   settings:
     backend: gcs
     bucket: test-julien
-    cache_key: test123
+    cache_key: node_modules
     json_key:
       from_secret: tf_google_credentials
-    local_root: /cache
     mount:
-    - yarn
+    - node_modules
     rebuild: true
-  volumes:
-  - name: cache
-    path: /cache
   when:
     event:
     - pull_request
   depends_on:
-  - initialize
+  - build-frontend
 
 volumes:
 - name: cache
@@ -176,6 +168,6 @@ get:
 
 ---
 kind: signature
-hmac: 0f75ff7999f74b8ee0717fad8faad40304444b505b2558f83f5c7e3219c3babe
+hmac: 2c17549f92567c2b6beae7ff0d8430423d6b9fd972c0e1663358b556b3b7e271
 
 ...
