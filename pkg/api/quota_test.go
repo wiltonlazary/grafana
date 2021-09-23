@@ -25,6 +25,14 @@ import (
 var getCurrentOrgUrl = "/api/org/"
 var getCurrentOrgQuotasUrl = "/api/org/quotas"
 
+var testOrgQuota = setting.OrgQuota{
+	User:       10,
+	DataSource: 10,
+	Dashboard:  10,
+	ApiKey:     10,
+	AlertRule:  10,
+}
+
 func setAccessControlPermissions(acmock *accesscontrolmock.Mock, perms []*accesscontrol.Permission) {
 	acmock.GetUserPermissionsFunc = func(_ context.Context, _ *models.SignedInUser) ([]*accesscontrol.Permission, error) {
 		return perms, nil
@@ -47,6 +55,7 @@ func setupHTTPServer(t *testing.T, enableAccessControl bool, signedInUser *model
 
 	// Use a test DB
 	db := sqlstore.InitTestDB(t)
+	db.Cfg = cfg
 
 	// Create minimal HTTP Server
 	hs := &HTTPServer{
@@ -127,23 +136,10 @@ func TestAPIEndpoint_GetCurrentOrgQuotas_LegacyAccessControl(t *testing.T) {
 	testuser := &models.SignedInUser{UserId: testUserID, OrgId: testOrgID, OrgRole: models.ROLE_VIEWER, Login: testUserLogin}
 	server, hs, _ := setupHTTPServer(t, false, testuser)
 
-	// TODO Tidy that
 	hs.Cfg.Quota.Enabled = true
-	setting.Quota.Enabled = true
-	hs.Cfg.Quota.Org = &setting.OrgQuota{
-		User:       10,
-		DataSource: 10,
-		Dashboard:  10,
-		ApiKey:     10,
-		AlertRule:  10,
-	}
-	setting.Quota.Org = &setting.OrgQuota{
-		User:       10,
-		DataSource: 10,
-		Dashboard:  10,
-		ApiKey:     10,
-		AlertRule:  10,
-	}
+	hs.Cfg.Quota.Org = &testOrgQuota
+	// Required while sqlstore quota.go relies on setting global variables
+	setting.Quota = hs.Cfg.Quota
 
 	_, err := hs.SQLStore.CreateOrgWithMember("TestOrg", testUserID)
 	require.NoError(t, err)
@@ -158,23 +154,10 @@ func TestAPIEndpoint_GetCurrentOrgQuotas_AccessControl(t *testing.T) {
 	testuser := &models.SignedInUser{UserId: testUserID, OrgId: testOrgID, OrgRole: models.ROLE_VIEWER, Login: testUserLogin}
 	server, hs, acmock := setupHTTPServer(t, true, testuser)
 
-	// TODO Tidy that
 	hs.Cfg.Quota.Enabled = true
-	setting.Quota.Enabled = true
-	hs.Cfg.Quota.Org = &setting.OrgQuota{
-		User:       10,
-		DataSource: 10,
-		Dashboard:  10,
-		ApiKey:     10,
-		AlertRule:  10,
-	}
-	setting.Quota.Org = &setting.OrgQuota{
-		User:       10,
-		DataSource: 10,
-		Dashboard:  10,
-		ApiKey:     10,
-		AlertRule:  10,
-	}
+	hs.Cfg.Quota.Org = &testOrgQuota
+	// Required while sqlstore quota.go relies on setting global variables
+	setting.Quota = hs.Cfg.Quota
 
 	_, err := hs.SQLStore.CreateOrgWithMember("TestOrg", testUserID)
 	require.NoError(t, err)
