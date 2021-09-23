@@ -216,8 +216,18 @@ func TestDevenvDashboardTrimApplyDefaults(t *testing.T) {
 					dsSchema, err := schema.SearchAndValidate(sch, byt)
 					require.NoError(t, err)
 
+					// Trimmed default json file
 					trimmed, err := schema.TrimDefaults(schema.Resource{Value: byt}, dsSchema.CUE())
 					require.NoError(t, err)
+
+					// store the trimmed result into testdata for easy debug
+					// file, _ := os.Create(filepath.Join("testdata", filepath.Base(path)))
+					// defer file.Close()
+					// var jsonMap map[string]interface{}
+					// json.Unmarshal([]byte(trimmed.Value.(string)), &jsonMap)
+					// jdata, err := json.MarshalIndent(jsonMap, "", "    ")
+					// require.NoError(t, err)
+					// file.Write(jdata)
 
 					out, err := schema.ApplyDefaults(schema.Resource{Value: trimmed.Value.(string)}, dsSchema.CUE())
 					require.NoError(t, err)
@@ -234,3 +244,11 @@ func TestDevenvDashboardTrimApplyDefaults(t *testing.T) {
 	require.NoError(t, err, "error while loading dist dashboard scuemata")
 	t.Run("dist", doTest(ddash))
 }
+
+// func JSONMarshal(t interface{}) ([]byte, error) {
+// 	buffer := &bytes.Buffer{}
+// 	encoder := json.NewEncoder(buffer)
+// 	encoder.SetEscapeHTML(false)
+// 	err := encoder.Encode(t)
+// 	return buffer.Bytes(), err
+// }

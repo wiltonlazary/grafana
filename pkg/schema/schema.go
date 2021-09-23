@@ -13,9 +13,8 @@ import (
 	errs "cuelang.org/go/cue/errors"
 	"cuelang.org/go/cue/format"
 	cuejson "cuelang.org/go/pkg/encoding/json"
+	"github.com/grafana/grafana/pkg/schema/rtinstance"
 )
-
-var rt = &cue.Runtime{}
 
 // CueError wraps Errors caused by malformed cue files.
 type CueError struct {
@@ -284,7 +283,7 @@ func ApplyDefaults(r Resource, scue cue.Value) (Resource, error) {
 	if name == "" {
 		name = "resource"
 	}
-	rv, err := rt.Compile(name, r.Value)
+	rv, err := rtinstance.Rt.Compile(name, r.Value)
 	if err != nil {
 		return r, err
 	}
@@ -331,7 +330,8 @@ func applyDefaultHelper(input cue.Value, scue cue.Value) (cue.Value, error) {
 				}
 			}
 			iterlistContent := fmt.Sprintf("[%s]", strings.Join(iterlist, ","))
-			liInstance, err := rt.Compile("resource", []byte(iterlistContent))
+
+			liInstance, err := rtinstance.Rt.Compile("resource", []byte(iterlistContent))
 			if err != nil {
 				return input, err
 			}
@@ -388,7 +388,7 @@ func TrimDefaults(r Resource, scue cue.Value) (Resource, error) {
 	if name == "" {
 		name = "resource"
 	}
-	rvInstance, err := rt.Compile(name, r.Value)
+	rvInstance, err := rtinstance.Rt.Compile(name, r.Value)
 	if err != nil {
 		return r, err
 	}
@@ -442,7 +442,7 @@ func isCueValueEqual(inputdef cue.Value, input cue.Value) bool {
 func removeDefaultHelper(inputdef cue.Value, input cue.Value) (cue.Value, bool, error) {
 	// To include all optional fields, we need to use inputdef for iteration,
 	// since the lookuppath with optional field doesn't work very well
-	rvInstance, err := rt.Compile("helper", []byte{})
+	rvInstance, err := rtinstance.Rt.Compile("helper", []byte{})
 	if err != nil {
 		return input, false, err
 	}
@@ -524,7 +524,7 @@ func removeDefaultHelper(inputdef cue.Value, input cue.Value) (cue.Value, bool, 
 				}
 			}
 			iterlistContent := fmt.Sprintf("[%s]", strings.Join(iterlist, ","))
-			liInstance, err := rt.Compile("resource", []byte(iterlistContent))
+			liInstance, err := rtinstance.Rt.Compile("resource", []byte(iterlistContent))
 			if err != nil {
 				return rv, false, err
 			}

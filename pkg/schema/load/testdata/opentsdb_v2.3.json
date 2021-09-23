@@ -1,0 +1,205 @@
+{
+    "annotations": {
+        "list": [
+            {
+                "builtIn": 1,
+                "datasource": "-- Grafana --",
+                "hide": true,
+                "iconColor": "rgba(0, 211, 255, 1)",
+                "name": "Annotations \u0026 Alerts"
+            }
+        ]
+    },
+    "id": 3151,
+    "links": [],
+    "panels": [
+        {
+            "aliasColors": {},
+            "datasource": "gdev-opentsdb-v2.3",
+            "fieldConfig": {
+                "defaults": {
+                    "links": []
+                },
+                "overrides": []
+            },
+            "fill": 1,
+            "fillGradient": 0,
+            "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 0,
+                "y": 0
+            },
+            "id": 2,
+            "legend": {
+                "avg": false,
+                "current": false,
+                "max": false,
+                "min": false,
+                "show": true,
+                "total": false,
+                "values": false
+            },
+            "lines": true,
+            "linewidth": 1,
+            "options": {
+                "alertThreshold": true
+            },
+            "pluginVersion": "8.1.0-pre",
+            "pointradius": 2,
+            "renderer": "flot",
+            "seriesOverrides": [],
+            "targets": [
+                {
+                    "aggregator": "sum",
+                    "alias": "$tag_hostname",
+                    "currentFilterGroupBy": false,
+                    "currentFilterKey": "",
+                    "currentFilterType": "literal_or",
+                    "currentFilterValue": "",
+                    "disableDownsampling": false,
+                    "downsampleAggregator": "avg",
+                    "downsampleFillPolicy": "none",
+                    "explicitTags": false,
+                    "filters": [
+                        {
+                            "filter": "*",
+                            "groupBy": true,
+                            "tagk": "hostname",
+                            "type": "wildcard"
+                        }
+                    ],
+                    "metric": "cpu",
+                    "refId": "A",
+                    "shouldComputeRate": false
+                }
+            ],
+            "thresholds": [],
+            "timeRegions": [],
+            "title": "CPU per host",
+            "tooltip": {
+                "shared": true
+            },
+            "type": "graph",
+            "xaxis": {
+                "mode": "time",
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "format": "short",
+                    "logBase": 1,
+                    "show": true
+                },
+                {
+                    "format": "short",
+                    "logBase": 1,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false
+            }
+        },
+        {
+            "aliasColors": {},
+            "datasource": "gdev-opentsdb-v2.3",
+            "fieldConfig": {
+                "defaults": {
+                    "links": []
+                },
+                "overrides": []
+            },
+            "fill": 1,
+            "fillGradient": 0,
+            "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 12,
+                "y": 0
+            },
+            "id": 4,
+            "legend": {
+                "avg": false,
+                "current": false,
+                "max": false,
+                "min": false,
+                "show": true,
+                "total": false,
+                "values": false
+            },
+            "lines": true,
+            "linewidth": 1,
+            "options": {
+                "alertThreshold": true
+            },
+            "pluginVersion": "8.1.0-pre",
+            "pointradius": 2,
+            "renderer": "flot",
+            "seriesOverrides": [],
+            "targets": [
+                {
+                    "aggregator": "sum",
+                    "alias": "$tag_hostname",
+                    "currentFilterGroupBy": false,
+                    "currentFilterKey": "",
+                    "currentFilterType": "literal_or",
+                    "currentFilterValue": "",
+                    "downsampleAggregator": "avg",
+                    "downsampleFillPolicy": "none",
+                    "filters": [
+                        {
+                            "filter": "*",
+                            "groupBy": true,
+                            "tagk": "hostname",
+                            "type": "wildcard"
+                        }
+                    ],
+                    "metric": "logins.count",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeRegions": [],
+            "title": "Login Count per host",
+            "tooltip": {
+                "shared": true
+            },
+            "type": "graph",
+            "xaxis": {
+                "mode": "time",
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "format": "short",
+                    "logBase": 1,
+                    "show": true
+                },
+                {
+                    "format": "short",
+                    "logBase": 1,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false
+            }
+        }
+    ],
+    "style": "dark",
+    "tags": [],
+    "templating": {
+        "list": []
+    },
+    "time": {
+        "from": "now-1h"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "Datasource tests - OpenTSDB v2.3",
+    "uid": "rZRUGik7k",
+    "version": 3
+}
