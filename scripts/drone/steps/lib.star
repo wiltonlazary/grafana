@@ -42,7 +42,7 @@ def initialize_step(edition, platform, ver_mode, is_downstream=False, install_de
         'chmod +x bin/grabpl',
     ]
     common_cmds = [
-        './bin/grabpl verify-drone',
+        'yarn cache dir',
     ]
 
     if ver_mode == 'release':
@@ -99,7 +99,7 @@ def initialize_step(edition, platform, ver_mode, is_downstream=False, install_de
                     'DOCKERIZE_VERSION': dockerize_version,
                 },
                 'depends_on': [
-                    'clone',
+                    'clone'
                 ],
                 'commands': [
                     'mv bin/grabpl /tmp/',
@@ -120,12 +120,23 @@ def initialize_step(edition, platform, ver_mode, is_downstream=False, install_de
         {
             'name': 'initialize',
             'image': build_image,
+            'depends_on': [
+                   'clone'
+                ],
             'environment': {
                 'DOCKERIZE_VERSION': dockerize_version,
+                'YARN_CACHE_FOLDER': '/cache/yarn',
             },
-            'commands': download_grabpl_cmds + common_cmds,
+            'commands': ['echo test'] + download_grabpl_cmds + common_cmds,
+            'volumes': [
+            {
+                'name': 'cache',
+                'path': '/cache',
+            },
+         ],
         },
     ]
+
 
     return steps
 
@@ -157,9 +168,6 @@ def lint_backend_step(edition):
             # We need CGO because of go-sqlite3
             'CGO_ENABLED': '1',
         },
-        'depends_on': [
-            'initialize',
-        ],
         'commands': [
             # Generate Go code, will install Wire
             # TODO: Install Wire in Docker image instead
@@ -295,7 +303,7 @@ def build_backend_step(edition, ver_mode, variants=None, is_downstream=False):
         'name': 'build-backend' + enterprise2_suffix(edition),
         'image': build_image,
         'depends_on': [
-            'test-backend' + enterprise2_suffix(edition),
+            'lint-backend',
         ],
         'environment': env,
         'commands': cmds,
@@ -327,6 +335,9 @@ def build_frontend_step(edition, ver_mode, is_downstream=False):
     return {
         'name': 'build-frontend',
         'image': build_image,
+        'environment': {
+            'YARN_CACHE_FOLDER': '/cache/yarn',
+        },
         'depends_on': [
             'test-frontend',
         ],
@@ -394,27 +405,73 @@ def test_frontend_step():
         'name': 'test-frontend',
         'image': build_image,
         'depends_on': [
-            'lint-backend',
+            'restore-cache',
+            'initialize'
         ],
         'environment': {
             'TEST_MAX_WORKERS': '50%',
+            'YARN_CACHE_FOLDER': '/cache/yarn',
         },
         'commands': [
             'yarn run ci:test-frontend',
         ],
     }
 
+
 def restore_cache_step():
     return {
-        'image': 'homerovalle/drone-gcs-cache',
+        'image': 'jduchesnegrafana/drone-cache:v1.2.0-rc0-dirtytest',
         'name': 'restore-cache',
         'pull': 'always',
-        'environment': {
-            'GCS_CACHE_JSON_KEY': 'tf_google_credentials',
-         },
          'settings': {
+            'backend': 'gcs',
+            'json_key': from_secret('tf_google_credentials'),
             'bucket': 'test-julien',
             'restore': 'true',
+            'cache_key': "test123",
+            'local_root': '/cache',
+            'mount': [
+                'yarn'
+            ],
+         },
+         'depends_on': [
+            'clone'
+         ],
+         'volumes': [
+            {
+                'name': 'cache',
+                'path': '/cache',
+            },
+         ],
+    }
+
+def rebuild_cache_step():
+    return {
+        'image': 'jduchesnegrafana/drone-cache:v1.2.0-rc0-dirtytest',
+        'name': 'rebuild-cache',
+        'pull': 'always',
+         'settings': {
+            'backend': 'gcs',
+            'json_key': from_secret('tf_google_credentials'),
+            'bucket': 'test-julien',
+            'cache_key': "test123",
+            'rebuild': 'true',
+            'local_root': '/cache',
+            'mount': [
+                'yarn'
+            ],
+         },
+         'depends_on': [
+            'initialize',
+         ],
+         'volumes': [
+            {
+               'name': 'cache',
+               'path': '/cache',
+            },
+         ],
+         'when': {
+            'event': 'pull_request',
          },
     }
 
@@ -449,6 +506,7 @@ def test_a11y_frontend_step_pr(edition, port=3001):
             'HOST': 'end-to-end-tests-server' + enterprise2_suffix(edition),
             'PORT': port,
         },
+        'failure': 'ignore',
         'commands': [
             'yarn wait-on http://$HOST:$PORT',
             'yarn -s test:accessibility-pr',
