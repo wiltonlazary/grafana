@@ -3,31 +3,113 @@ package cloudwatch
 import (
 	"testing"
 
+	"github.com/grafana/grafana/pkg/services/featuremgmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestMetricDataQueryBuilder_buildSearchExpression(t *testing.T) {
+func TestMetricDataQueryBuilder(t *testing.T) {
 	t.Run("buildMetricDataQuery", func(t *testing.T) {
-		t.Run("should set period in user defined expression", func(t *testing.T) {
-			executor := newExecutor(nil, nil, newTestConfig(), fakeSessionCache{})
-			query := &cloudWatchQuery{
-				Namespace:  "AWS/EC2",
-				MetricName: "CPUUtilization",
-				Dimensions: map[string][]string{
-					"LoadBalancer": {"lb1"},
-				},
-				Period:     300,
-				Expression: "SUM([a,b])",
-				MatchExact: true,
-			}
+		t.Run("should use metric stat", func(t *testing.T) {
+			executor := newExecutor(nil, newTestConfig(), &fakeSessionCache{}, featuremgmt.WithFeatures())
+			query := getBaseQuery()
+			query.MetricEditorMode = MetricEditorModeBuilder
+			query.MetricQueryType = MetricQueryTypeSearch
+			mdq, err := executor.buildMetricDataQuery(query)
+			require.NoError(t, err)
+			require.Empty(t, mdq.Expression)
+			assert.Equal(t, query.MetricName, *mdq.MetricStat.Metric.MetricName)
+			assert.Equal(t, query.Namespace, *mdq.MetricStat.Metric.Namespace)
+		})
+
+		t.Run("should use custom built expression", func(t *testing.T) {
+			executor := newExecutor(nil, newTestConfig(), &fakeSessionCache{}, featuremgmt.WithFeatures())
+			query := getBaseQuery()
+			query.MetricEditorMode = MetricEditorModeBuilder
+			query.MetricQueryType = MetricQueryTypeSearch
 			query.MatchExact = false
+			mdq, err := executor.buildMetricDataQuery(query)
+			require.NoError(t, err)
+			require.Nil(t, mdq.MetricStat)
+			assert.Equal(t, `REMOVE_EMPTY(SEARCH('Namespace="AWS/EC2" MetricName="CPUUtilization" "LoadBalancer"="lb1"', '', 300))`, *mdq.Expression)
+		})
+
+		t.Run("should use sql expression", func(t *testing.T) {
+			executor := newExecutor(nil, newTestConfig(), &fakeSessionCache{}, featuremgmt.WithFeatures())
+			query := getBaseQuery()
+			query.MetricEditorMode = MetricEditorModeRaw
+			query.MetricQueryType = MetricQueryTypeQuery
+			query.SqlExpression = `SELECT SUM(CPUUTilization) FROM "AWS/EC2"`
+			mdq, err := executor.buildMetricDataQuery(query)
+			require.NoError(t, err)
+			require.Nil(t, mdq.MetricStat)
+			assert.Equal(t, query.SqlExpression, *mdq.Expression)
+		})
+
+		t.Run("should use user defined math expression", func(t *testing.T) {
+			executor := newExecutor(nil, newTestConfig(), &fakeSessionCache{}, featuremgmt.WithFeatures())
+			query := getBaseQuery()
+			query.MetricEditorMode = MetricEditorModeRaw
+			query.MetricQueryType = MetricQueryTypeSearch
+			query.Expression = `SUM(x+y)`
+			mdq, err := executor.buildMetricDataQuery(query)
+			require.NoError(t, err)
+			require.Nil(t, mdq.MetricStat)
+			assert.Equal(t, query.Expression, *mdq.Expression)
+		})
+
+		t.Run("should set period in user defined expression", func(t *testing.T) {
+			executor := newExecutor(nil, newTestConfig(), &fakeSessionCache{}, featuremgmt.WithFeatures())
+			query := getBaseQuery()
+			query.MetricEditorMode = MetricEditorModeRaw
+			query.MetricQueryType = MetricQueryTypeSearch
+			query.MatchExact = false
+			query.Expression = `SUM([a,b])`
 			mdq, err := executor.buildMetricDataQuery(query)
 			require.NoError(t, err)
 			require.Nil(t, mdq.MetricStat)
 			assert.Equal(t, int64(300), *mdq.Period)
 			assert.Equal(t, `SUM([a,b])`, *mdq.Expression)
 		})
+
+		t.Run("should set label when dynamic labels feature toggle is enabled", func(t *testing.T) {
+			executor := newExecutor(nil, newTestConfig(), &fakeSessionCache{}, featuremgmt.WithFeatures(featuremgmt.FlagCloudWatchDynamicLabels))
+			query := getBaseQuery()
+			query.Label = "some label"
+
+			mdq, err := executor.buildMetricDataQuery(query)
+
+			assert.NoError(t, err)
+			require.NotNil(t, mdq.Label)
+			assert.Equal(t, "some label", *mdq.Label)
+		})
+
+		testCases := map[string]struct {
+			feature *featuremgmt.FeatureManager
+			label   string
+		}{
+			"should not set label when dynamic labels feature toggle is disabled": {
+				feature: featuremgmt.WithFeatures(),
+				label:   "some label",
+			},
+			"should not set label for empty string query label": {
+				feature: featuremgmt.WithFeatures(featuremgmt.FlagCloudWatchDynamicLabels),
+				label:   "",
+			},
+		}
+
+		for name, tc := range testCases {
+			t.Run(name, func(t *testing.T) {
+				executor := newExecutor(nil, newTestConfig(), &fakeSessionCache{}, tc.feature)
+				query := getBaseQuery()
+				query.Label = tc.label
+
+				mdq, err := executor.buildMetricDataQuery(query)
+
+				assert.NoError(t, err)
+				assert.Nil(t, mdq.Label)
+			})
+		}
 	})
 
 	t.Run("Query should be matched exact", func(t *testing.T) {
@@ -234,4 +316,18 @@ func TestMetricDataQueryBuilder_buildSearchExpression(t *testing.T) {
 
 		assert.Contains(t, res, `lb4\"\"`, "Expected escape double quotes")
 	})
+}
+
+func getBaseQuery() *cloudWatchQuery {
+	query := &cloudWatchQuery{
+		Namespace:  "AWS/EC2",
+		MetricName: "CPUUtilization",
+		Dimensions: map[string][]string{
+			"LoadBalancer": {"lb1"},
+		},
+		Period:     300,
+		Expression: "",
+		MatchExact: true,
+	}
+	return query
 }

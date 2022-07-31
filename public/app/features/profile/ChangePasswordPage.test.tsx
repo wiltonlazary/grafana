@@ -1,11 +1,13 @@
-import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import React from 'react';
+
 import config from 'app/core/config';
+
+import { backendSrv } from '../../core/services/backend_srv';
+
 import { Props, ChangePasswordPage } from './ChangePasswordPage';
 import { initialUserState } from './state/reducers';
-import { getNavModel } from '../../core/selectors/navModel';
-import { backendSrv } from '../../core/services/backend_srv';
 
 const defaultProps: Props = {
   ...initialUserState,
@@ -19,23 +21,6 @@ const defaultProps: Props = {
     orgId: 0,
     authLabels: ['github'],
   },
-  navModel: getNavModel(
-    {
-      'profile-settings': {
-        icon: 'sliders-v-alt',
-        id: 'profile-settings',
-        parentItem: {
-          id: 'profile',
-          text: 'Test User',
-          img: '/avatar/46d229b033af06a191ff2267bca9ae56',
-          url: '/profile',
-        },
-        text: 'Preferences',
-        url: '/profile',
-      },
-    },
-    'profile-settings'
-  ),
   loadUser: jest.fn(),
   changePassword: jest.fn(),
 };

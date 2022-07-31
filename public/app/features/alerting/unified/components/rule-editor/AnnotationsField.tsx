@@ -1,9 +1,12 @@
-import React, { FC, useCallback } from 'react';
-import { Button, Field, FieldArray, Input, InputControl, Label, TextArea, useStyles } from '@grafana/ui';
-import { GrafanaTheme } from '@grafana/data';
 import { css, cx } from '@emotion/css';
+import React, { FC, useCallback } from 'react';
 import { useFormContext } from 'react-hook-form';
+
+import { GrafanaTheme } from '@grafana/data';
+import { Button, Field, FieldArray, Input, InputControl, Label, TextArea, useStyles } from '@grafana/ui';
+
 import { RuleFormValues } from '../../types/rule-form';
+
 import { AnnotationKeyInput } from './AnnotationKeyInput';
 
 const AnnotationsField: FC = () => {
@@ -42,7 +45,12 @@ const AnnotationsField: FC = () => {
                       <InputControl
                         name={`annotations[${index}].key`}
                         render={({ field: { ref, ...field } }) => (
-                          <AnnotationKeyInput {...field} existingKeys={existingKeys(index)} width={18} />
+                          <AnnotationKeyInput
+                            {...field}
+                            aria-label={`Annotation detail ${index + 1}`}
+                            existingKeys={existingKeys(index)}
+                            width={18}
+                          />
                         )}
                         control={control}
                         rules={{ required: { value: !!annotations[index]?.value, message: 'Required.' } }}

@@ -1,24 +1,29 @@
-import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { configureStore } from 'app/store/configureStore';
+import React from 'react';
 import { Provider } from 'react-redux';
-import { QueryRows } from './QueryRows';
-import { ExploreId, ExploreState } from 'app/types';
-import { makeExplorePaneState } from './state/utils';
+
 import { setDataSourceSrv } from '@grafana/runtime';
-import { UserState } from '../profile/state/reducers';
+import { configureStore } from 'app/store/configureStore';
+import { ExploreId, ExploreState } from 'app/types';
+
 import { DataQuery } from '../../../../packages/grafana-data/src';
+import { UserState } from '../profile/state/reducers';
+
+import { QueryRows } from './QueryRows';
+import { makeExplorePaneState } from './state/utils';
 
 function setup(queries: DataQuery[]) {
   const defaultDs = {
     name: 'newDs',
+    uid: 'newDs-uid',
     meta: { id: 'newDs' },
   };
 
   const datasources: Record<string, any> = {
-    newDs: defaultDs,
-    someDs: {
+    'newDs-uid': defaultDs,
+    'someDs-uid': {
       name: 'someDs',
+      uid: 'someDs-uid',
       meta: { id: 'someDs' },
       components: {
         QueryEditor: () => 'someDs query editor',
@@ -30,11 +35,11 @@ function setup(queries: DataQuery[]) {
     getList() {
       return Object.values(datasources).map((d) => ({ name: d.name }));
     },
-    getInstanceSettings(name: string) {
-      return datasources[name] || defaultDs;
+    getInstanceSettings(uid: string) {
+      return datasources[uid] || defaultDs;
     },
-    get(name?: string) {
-      return Promise.resolve(name ? datasources[name] || defaultDs : defaultDs);
+    get(uid?: string) {
+      return Promise.resolve(uid ? datasources[uid] || defaultDs : defaultDs);
     },
   } as any);
 
@@ -42,12 +47,15 @@ function setup(queries: DataQuery[]) {
   const initialState: ExploreState = {
     left: {
       ...leftState,
-      datasourceInstance: datasources.someDs,
+      richHistory: [],
+      datasourceInstance: datasources['someDs-uid'],
       queries,
     },
     syncedTimes: false,
     right: undefined,
-    richHistory: [],
+    richHistoryStorageFull: false,
+    richHistoryLimitExceededWarningShown: false,
+    richHistoryMigrationFailed: false,
   };
   const store = configureStore({ explore: initialState, user: { orgId: 1 } as UserState });
 

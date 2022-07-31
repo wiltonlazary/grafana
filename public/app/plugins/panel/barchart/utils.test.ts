@@ -1,11 +1,5 @@
-import { prepareGraphableFrames, preparePlotConfigBuilder, preparePlotFrame } from './utils';
-import {
-  LegendDisplayMode,
-  TooltipDisplayMode,
-  VisibilityMode,
-  GraphGradientMode,
-  StackingMode,
-} from '@grafana/schema';
+import { assertIsDefined } from 'test/helpers/asserts';
+
 import {
   createTheme,
   DefaultTimeZone,
@@ -16,7 +10,17 @@ import {
   MutableDataFrame,
   VizOrientation,
 } from '@grafana/data';
-import { BarChartFieldConfig, BarChartOptions } from './types';
+import {
+  LegendDisplayMode,
+  TooltipDisplayMode,
+  VisibilityMode,
+  GraphGradientMode,
+  StackingMode,
+  SortOrder,
+} from '@grafana/schema';
+
+import { BarChartFieldConfig } from './models.gen';
+import { BarChartOptionsEX, prepareBarChartDisplayValues, preparePlotConfigBuilder } from './utils';
 
 function mockDataFrame() {
   const df1 = new MutableDataFrame({
@@ -65,11 +69,17 @@ function mockDataFrame() {
     state: {},
   });
 
-  return preparePlotFrame([df1, df2]);
+  const info = prepareBarChartDisplayValues([df1], createTheme(), {} as any);
+
+  if (!('aligned' in info)) {
+    throw new Error('Bar chart not prepared correctly');
+  }
+
+  return info.aligned;
 }
 
 jest.mock('@grafana/data', () => ({
-  ...(jest.requireActual('@grafana/data') as any),
+  ...jest.requireActual('@grafana/data'),
   DefaultTimeZone: 'utc',
 }));
 
@@ -77,19 +87,23 @@ describe('BarChart utils', () => {
   describe('preparePlotConfigBuilder', () => {
     const frame = mockDataFrame();
 
-    const config: BarChartOptions = {
+    const config: BarChartOptionsEX = {
       orientation: VizOrientation.Auto,
       groupWidth: 20,
       barWidth: 2,
       showValue: VisibilityMode.Always,
       legend: {
         displayMode: LegendDisplayMode.List,
+        showLegend: true,
         placement: 'bottom',
         calcs: [],
       },
+      xTickLabelRotation: 0,
+      xTickLabelMaxLength: 20,
       stacking: StackingMode.None,
       tooltip: {
         mode: TooltipDisplayMode.None,
+        sort: SortOrder.None,
       },
       text: {
         valueSize: 10,
@@ -103,7 +117,7 @@ describe('BarChart utils', () => {
         orientation: v,
         frame: frame!,
         theme: createTheme(),
-        timeZone: DefaultTimeZone,
+        timeZones: [DefaultTimeZone],
         getTimeRange: getDefaultTimeRange,
         eventBus: new EventBusSrv(),
         allFrames: [frame],
@@ -118,7 +132,7 @@ describe('BarChart utils', () => {
           showValue: v,
           frame: frame!,
           theme: createTheme(),
-          timeZone: DefaultTimeZone,
+          timeZones: [DefaultTimeZone],
           getTimeRange: getDefaultTimeRange,
           eventBus: new EventBusSrv(),
           allFrames: [frame],
@@ -133,7 +147,7 @@ describe('BarChart utils', () => {
           stacking: v,
           frame: frame!,
           theme: createTheme(),
-          timeZone: DefaultTimeZone,
+          timeZones: [DefaultTimeZone],
           getTimeRange: getDefaultTimeRange,
           eventBus: new EventBusSrv(),
           allFrames: [frame],
@@ -144,20 +158,23 @@ describe('BarChart utils', () => {
 
   describe('prepareGraphableFrames', () => {
     it('will warn when there is no data in the response', () => {
-      const result = prepareGraphableFrames([], createTheme(), StackingMode.None);
-      expect(result.warn).toEqual('No data in response');
+      const result = prepareBarChartDisplayValues([], createTheme(), { stacking: StackingMode.None } as any);
+      const warning = assertIsDefined('warn' in result ? result : null);
+
+      expect(warning.warn).toEqual('No data in response');
     });
 
-    it('will warn when there is no string field in the response', () => {
+    it('will warn when there is no string or time field', () => {
       const df = new MutableDataFrame({
         fields: [
-          { name: 'a', type: FieldType.time, values: [1, 2, 3, 4, 5] },
+          { name: 'a', type: FieldType.other, values: [1, 2, 3, 4, 5] },
           { name: 'value', values: [1, 2, 3, 4, 5] },
         ],
       });
-      const result = prepareGraphableFrames([df], createTheme(), StackingMode.None);
-      expect(result.warn).toEqual('Bar charts requires a string field');
-      expect(result.frames).toBeUndefined();
+      const result = prepareBarChartDisplayValues([df], createTheme(), { stacking: StackingMode.None } as any);
+      const warning = assertIsDefined('warn' in result ? result : null);
+      expect(warning.warn).toEqual('Bar charts requires a string or time field');
+      expect(warning).not.toHaveProperty('viz');
     });
 
     it('will warn when there are no numeric fields in the response', () => {
@@ -167,9 +184,10 @@ describe('BarChart utils', () => {
           { name: 'value', type: FieldType.boolean, values: [true, true, true, true, true] },
         ],
       });
-      const result = prepareGraphableFrames([df], createTheme(), StackingMode.None);
-      expect(result.warn).toEqual('No numeric fields found');
-      expect(result.frames).toBeUndefined();
+      const result = prepareBarChartDisplayValues([df], createTheme(), { stacking: StackingMode.None } as any);
+      const warning = assertIsDefined('warn' in result ? result : null);
+      expect(warning.warn).toEqual('No numeric fields found');
+      expect(warning).not.toHaveProperty('viz');
     });
 
     it('will convert NaN and Infinty to nulls', () => {
@@ -179,10 +197,11 @@ describe('BarChart utils', () => {
           { name: 'value', values: [-10, NaN, 10, -Infinity, +Infinity] },
         ],
       });
-      const result = prepareGraphableFrames([df], createTheme(), StackingMode.None);
+      const result = prepareBarChartDisplayValues([df], createTheme(), { stacking: StackingMode.None } as any);
+      const displayValues = assertIsDefined('viz' in result ? result : null);
 
-      const field = result.frames![0].fields[1];
-      expect(field!.values.toArray()).toMatchInlineSnapshot(`
+      const field = displayValues.viz[0].fields[1];
+      expect(field.values.toArray()).toMatchInlineSnapshot(`
       Array [
         -10,
         null,
@@ -191,6 +210,35 @@ describe('BarChart utils', () => {
         null,
       ]
     `);
+    });
+
+    it('should sort fields when legend sortBy and sortDesc are set', () => {
+      const frame = new MutableDataFrame({
+        fields: [
+          { name: 'string', type: FieldType.string, values: ['a', 'b', 'c'] },
+          { name: 'a', values: [-10, 20, 10], state: { calcs: { min: -10 } } },
+          { name: 'b', values: [20, 20, 20], state: { calcs: { min: 20 } } },
+          { name: 'c', values: [10, 10, 10], state: { calcs: { min: 10 } } },
+        ],
+      });
+
+      const resultAsc = prepareBarChartDisplayValues([frame], createTheme(), {
+        legend: { sortBy: 'Min', sortDesc: false },
+      } as any);
+      const displayValuesAsc = assertIsDefined('viz' in resultAsc ? resultAsc : null).viz[0];
+      expect(displayValuesAsc.fields[0].type).toBe(FieldType.string);
+      expect(displayValuesAsc.fields[1].name).toBe('a');
+      expect(displayValuesAsc.fields[2].name).toBe('c');
+      expect(displayValuesAsc.fields[3].name).toBe('b');
+
+      const resultDesc = prepareBarChartDisplayValues([frame], createTheme(), {
+        legend: { sortBy: 'Min', sortDesc: true },
+      } as any);
+      const displayValuesDesc = assertIsDefined('viz' in resultDesc ? resultDesc : null).viz[0];
+      expect(displayValuesDesc.fields[0].type).toBe(FieldType.string);
+      expect(displayValuesDesc.fields[1].name).toBe('b');
+      expect(displayValuesDesc.fields[2].name).toBe('c');
+      expect(displayValuesDesc.fields[3].name).toBe('a');
     });
   });
 });

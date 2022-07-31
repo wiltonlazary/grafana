@@ -1,20 +1,15 @@
-// Libraries
-import React, { Component } from 'react';
 import { debounce, isNil } from 'lodash';
+import React, { Component } from 'react';
 
-// Components
-import { AsyncSelect } from '@grafana/ui';
-
-// Utils & Services
-import { getBackendSrv } from '@grafana/runtime';
-
-// Types
-import { OrgUser } from 'app/types';
 import { SelectableValue } from '@grafana/data';
+import { getBackendSrv } from '@grafana/runtime';
+import { AsyncSelect } from '@grafana/ui';
+import { OrgUser } from 'app/types';
 
 export interface Props {
   onSelected: (user: SelectableValue<OrgUser['userId']>) => void;
   className?: string;
+  inputId?: string;
 }
 
 export interface State {
@@ -59,21 +54,22 @@ export class UserPicker extends Component<Props, State> {
   }
 
   render() {
-    const { className, onSelected } = this.props;
+    const { className, onSelected, inputId } = this.props;
     const { isLoading } = this.state;
 
     return (
       <div className="user-picker" data-testid="userPicker">
         <AsyncSelect
-          menuShouldPortal
           isClearable
           className={className}
+          inputId={inputId}
           isLoading={isLoading}
           defaultOptions={true}
           loadOptions={this.debouncedSearch}
           onChange={onSelected}
           placeholder="Start typing to search for user"
           noOptionsMessage="No users found"
+          aria-label="User picker"
         />
       </div>
     );

@@ -1,14 +1,17 @@
 import React from 'react';
-import { DataFrame, TimeRange } from '@grafana/data';
-import { GraphNG, GraphNGProps } from '../GraphNG/GraphNG';
-import { UPlotConfigBuilder } from '../uPlot/config/UPlotConfigBuilder';
-import { PlotLegend } from '../uPlot/PlotLegend';
-import { LegendDisplayMode } from '@grafana/schema';
-import { preparePlotConfigBuilder } from './utils';
-import { withTheme2 } from '../../themes/ThemeContext';
-import { PanelContext, PanelContextRoot } from '../PanelChrome/PanelContext';
 
-const propsToDiff: string[] = [];
+import { DataFrame, TimeRange } from '@grafana/data';
+
+import { PropDiffFn } from '../../../../../packages/grafana-ui/src/components/GraphNG/GraphNG';
+import { withTheme2 } from '../../themes/ThemeContext';
+import { GraphNG, GraphNGProps } from '../GraphNG/GraphNG';
+import { PanelContext, PanelContextRoot } from '../PanelChrome/PanelContext';
+import { PlotLegend } from '../uPlot/PlotLegend';
+import { UPlotConfigBuilder } from '../uPlot/config/UPlotConfigBuilder';
+
+import { preparePlotConfigBuilder } from './utils';
+
+const propsToDiff: Array<string | PropDiffFn> = ['legend', 'options'];
 
 type TimeSeriesProps = Omit<GraphNGProps, 'prepConfig' | 'propsToDiff' | 'renderLegend'>;
 
@@ -17,24 +20,28 @@ export class UnthemedTimeSeries extends React.Component<TimeSeriesProps> {
   panelContext: PanelContext = {} as PanelContext;
 
   prepConfig = (alignedFrame: DataFrame, allFrames: DataFrame[], getTimeRange: () => TimeRange) => {
-    const { eventBus, sync } = this.context;
-    const { theme, timeZone } = this.props;
+    const { eventBus, sync } = this.context as PanelContext;
+    const { theme, timeZones, renderers, tweakAxis, tweakScale } = this.props;
 
     return preparePlotConfigBuilder({
       frame: alignedFrame,
       theme,
-      timeZone,
+      timeZones: Array.isArray(timeZones) ? timeZones : [timeZones],
       getTimeRange,
       eventBus,
       sync,
       allFrames,
+      renderers,
+      tweakScale,
+      tweakAxis,
     });
   };
 
   renderLegend = (config: UPlotConfigBuilder) => {
     const { legend, frames } = this.props;
 
-    if (!config || (legend && legend.displayMode === LegendDisplayMode.Hidden)) {
+    //hides and shows the legend ON the uPlot graph
+    if (!config || (legend && !legend.showLegend)) {
       return null;
     }
 

@@ -26,6 +26,10 @@ func NewDashboardProvisionerMock() *ProvisionerMock {
 	}
 }
 
+func (dpm *ProvisionerMock) HasDashboardSources() bool {
+	return dpm.ProvisionFunc != nil
+}
+
 // Provision is a mock implementation of `Provisioner.Provision`
 func (dpm *ProvisionerMock) Provision(ctx context.Context) error {
 	dpm.Calls.Provision = append(dpm.Calls.Provision, nil)
@@ -62,4 +66,4 @@ func (dpm *ProvisionerMock) GetAllowUIUpdatesFromConfig(name string) bool {
 }
 
 // CleanUpOrphanedDashboards not implemented for mocks
-func (dpm *ProvisionerMock) CleanUpOrphanedDashboards() {}
+func (dpm *ProvisionerMock) CleanUpOrphanedDashboards(ctx context.Context) {}

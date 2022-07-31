@@ -1,13 +1,12 @@
+import { css, cx } from '@emotion/css';
+import memoizeOne from 'memoize-one';
 import React from 'react';
 import { connect, ConnectedProps } from 'react-redux';
-import memoizeOne from 'memoize-one';
-import { DataQuery, ExploreUrlState, EventBusExtended, EventBusSrv } from '@grafana/data';
+
+import { DataQuery, ExploreUrlState, EventBusExtended, EventBusSrv, GrafanaTheme2 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
+import { Themeable2, withTheme2 } from '@grafana/ui';
 import store from 'app/core/store';
-import { lastSavedUrl, cleanupPaneAction } from './state/main';
-import { initializeExplore, refreshExplore } from './state/explorePane';
-import { ExploreId } from 'app/types/explore';
-import { StoreState } from 'app/types';
 import {
   DEFAULT_RANGE,
   ensureQueries,
@@ -16,10 +15,32 @@ import {
   lastUsedDatasourceKeyForOrgId,
   parseUrlState,
 } from 'app/core/utils/explore';
-import { getTimeZone } from '../profile/state/selectors';
-import Explore from './Explore';
+import { StoreState } from 'app/types';
+import { ExploreId } from 'app/types/explore';
 
-interface OwnProps {
+import { getFiscalYearStartMonth, getTimeZone } from '../profile/state/selectors';
+
+import Explore from './Explore';
+import { initializeExplore, refreshExplore } from './state/explorePane';
+import { lastSavedUrl, cleanupPaneAction } from './state/main';
+
+const getStyles = (theme: GrafanaTheme2) => {
+  return {
+    explore: css`
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      & + & {
+        border-left: 1px dotted ${theme.colors.border.medium};
+      }
+    `,
+    exploreSplit: css`
+      width: 50%;
+    `,
+  };
+};
+
+interface OwnProps extends Themeable2 {
   exploreId: ExploreId;
   urlQuery: string;
   split: boolean;
@@ -31,7 +52,7 @@ interface Props extends OwnProps, ConnectedProps<typeof connector> {}
  * This component is responsible for handling initialization of an Explore pane and triggering synchronization
  * of state based on URL changes and preventing any infinite loops.
  */
-export class ExplorePaneContainerUnconnected extends React.PureComponent<Props> {
+class ExplorePaneContainerUnconnected extends React.PureComponent<Props> {
   el: any;
   exploreEvents: EventBusExtended;
 
@@ -44,7 +65,7 @@ export class ExplorePaneContainerUnconnected extends React.PureComponent<Props> 
   }
 
   componentDidMount() {
-    const { initialized, exploreId, initialDatasource, initialQueries, initialRange, originPanelId } = this.props;
+    const { initialized, exploreId, initialDatasource, initialQueries, initialRange, panelsState } = this.props;
     const width = this.el?.offsetWidth ?? 0;
 
     // initialize the whole explore first time we mount and if browser history contains a change in datasource
@@ -56,7 +77,7 @@ export class ExplorePaneContainerUnconnected extends React.PureComponent<Props> 
         initialRange,
         width,
         this.exploreEvents,
-        originPanelId
+        panelsState
       );
     }
   }
@@ -84,10 +105,12 @@ export class ExplorePaneContainerUnconnected extends React.PureComponent<Props> 
   };
 
   render() {
-    const exploreClass = this.props.split ? 'explore explore-split' : 'explore';
+    const { theme, split, exploreId, initialized } = this.props;
+    const styles = getStyles(theme);
+    const exploreClass = cx(styles.explore, split && styles.exploreSplit);
     return (
       <div className={exploreClass} ref={this.getRef} data-testid={selectors.pages.Explore.General.container}>
-        {this.props.initialized && <Explore exploreId={this.props.exploreId} />}
+        {initialized && <Explore exploreId={exploreId} />}
       </div>
     );
   }
@@ -99,20 +122,21 @@ const getTimeRangeFromUrlMemoized = memoizeOne(getTimeRangeFromUrl);
 function mapStateToProps(state: StoreState, props: OwnProps) {
   const urlState = parseUrlState(props.urlQuery);
   const timeZone = getTimeZone(state.user);
+  const fiscalYearStartMonth = getFiscalYearStartMonth(state.user);
 
-  const { datasource, queries, range: urlRange, originPanelId } = (urlState || {}) as ExploreUrlState;
+  const { datasource, queries, range: urlRange, panelsState } = (urlState || {}) as ExploreUrlState;
   const initialDatasource = datasource || store.get(lastUsedDatasourceKeyForOrgId(state.user.orgId));
   const initialQueries: DataQuery[] = ensureQueriesMemoized(queries);
   const initialRange = urlRange
-    ? getTimeRangeFromUrlMemoized(urlRange, timeZone)
-    : getTimeRange(timeZone, DEFAULT_RANGE);
+    ? getTimeRangeFromUrlMemoized(urlRange, timeZone, fiscalYearStartMonth)
+    : getTimeRange(timeZone, DEFAULT_RANGE, fiscalYearStartMonth);
 
   return {
     initialized: state.explore[props.exploreId]?.initialized,
     initialDatasource,
     initialQueries,
     initialRange,
-    originPanelId,
+    panelsState,
   };
 }
 
@@ -124,4 +148,4 @@ const mapDispatchToProps = {
 
 const connector = connect(mapStateToProps, mapDispatchToProps);
 
-export const ExplorePaneContainer = connector(ExplorePaneContainerUnconnected);
+export const ExplorePaneContainer = withTheme2(connector(ExplorePaneContainerUnconnected));

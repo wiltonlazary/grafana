@@ -1,123 +1,285 @@
-import React, { FC, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
-import { GrafanaTheme2 } from '@grafana/data';
+import { FocusScope } from '@react-aria/focus';
+import { cloneDeep } from 'lodash';
+import React, { useState } from 'react';
+import { useSelector } from 'react-redux';
+import { useLocation } from 'react-router-dom';
+
+import { GrafanaTheme2, NavModelItem, NavSection } from '@grafana/data';
+import { config, locationService, reportInteraction } from '@grafana/runtime';
 import { Icon, useTheme2 } from '@grafana/ui';
-import appEvents from '../../app_events';
 import { Branding } from 'app/core/components/Branding/Branding';
-import config from 'app/core/config';
-import { CoreEvents, KioskMode } from 'app/types';
-import TopSection from './TopSection';
-import BottomSection from './BottomSection';
+import { getKioskMode } from 'app/core/navigation/kiosk';
+import { KioskMode, StoreState } from 'app/types';
 
-const homeUrl = config.appSubUrl || '/';
+import { OrgSwitcher } from '../OrgSwitcher';
 
-export const NavBar: FC = React.memo(() => {
+import NavBarItem from './NavBarItem';
+import { NavBarItemWithoutMenu } from './NavBarItemWithoutMenu';
+import { NavBarMenu } from './NavBarMenu';
+import { NavBarMenuPortalContainer } from './NavBarMenuPortalContainer';
+import { NavBarScrollContainer } from './NavBarScrollContainer';
+import { NavBarToggle } from './NavBarToggle';
+import { NavBarContext } from './context';
+import {
+  enrichConfigItems,
+  enrichWithInteractionTracking,
+  getActiveItem,
+  isMatchOrChildMatch,
+  isSearchActive,
+  SEARCH_ITEM_ID,
+} from './utils';
+
+const onOpenSearch = () => {
+  locationService.partial({ search: 'open' });
+};
+
+export const NavBar = React.memo(() => {
+  const navBarTree = useSelector((state: StoreState) => state.navBarTree);
   const theme = useTheme2();
   const styles = getStyles(theme);
   const location = useLocation();
-  const query = new URLSearchParams(location.search);
-  const kiosk = query.get('kiosk') as KioskMode;
+  const kiosk = getKioskMode();
+  const [showSwitcherModal, setShowSwitcherModal] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAnimationInProgress, setMenuAnimationInProgress] = useState(false);
+  const [menuIdOpen, setMenuIdOpen] = useState<string | undefined>(undefined);
 
-  const toggleNavBarSmallBreakpoint = useCallback(() => {
-    appEvents.emit(CoreEvents.toggleSidemenuMobile);
-  }, []);
+  const toggleSwitcherModal = () => {
+    setShowSwitcherModal(!showSwitcherModal);
+  };
 
-  if (kiosk !== null) {
+  // Here we need to hack in a "home" and "search" NavModelItem since this is constructed in the frontend
+  const searchItem: NavModelItem = enrichWithInteractionTracking(
+    {
+      id: SEARCH_ITEM_ID,
+      onClick: onOpenSearch,
+      text: 'Search dashboards',
+      icon: 'search',
+    },
+    menuOpen
+  );
+
+  const homeItem: NavModelItem = enrichWithInteractionTracking(
+    {
+      id: 'home',
+      text: 'Home',
+      url: config.appSubUrl || '/',
+      icon: 'grafana',
+    },
+    menuOpen
+  );
+
+  const navTree = cloneDeep(navBarTree);
+
+  const coreItems = navTree
+    .filter((item) => item.section === NavSection.Core)
+    .map((item) => enrichWithInteractionTracking(item, menuOpen));
+  const pluginItems = navTree
+    .filter((item) => item.section === NavSection.Plugin)
+    .map((item) => enrichWithInteractionTracking(item, menuOpen));
+  const configItems = enrichConfigItems(
+    navTree.filter((item) => item.section === NavSection.Config),
+    location,
+    toggleSwitcherModal
+  ).map((item) => enrichWithInteractionTracking(item, menuOpen));
+
+  const activeItem = isSearchActive(location) ? searchItem : getActiveItem(navTree, location.pathname);
+
+  if (kiosk !== KioskMode.Off) {
     return null;
   }
-
   return (
-    <nav className={cx(styles.sidemenu, 'sidemenu')} data-testid="sidemenu" aria-label="Main menu">
-      <a href={homeUrl} className={styles.homeLogo}>
-        <Branding.MenuLogo />
-      </a>
-      <div className={styles.mobileSidemenuLogo} onClick={toggleNavBarSmallBreakpoint} key="hamburger">
-        <Icon name="bars" size="xl" />
-        <span className={styles.closeButton}>
-          <Icon name="times" />
-          Close
-        </span>
-      </div>
-      <TopSection />
-      <BottomSection />
-    </nav>
+    <div className={styles.navWrapper}>
+      <nav className={cx(styles.sidemenu, 'sidemenu')} data-testid="sidemenu" aria-label="Main menu">
+        <NavBarContext.Provider
+          value={{
+            menuIdOpen: menuIdOpen,
+            setMenuIdOpen: setMenuIdOpen,
+          }}
+        >
+          <FocusScope>
+            <div className={styles.mobileSidemenuLogo} onClick={() => setMenuOpen(!menuOpen)} key="hamburger">
+              <Icon name="bars" size="xl" />
+            </div>
+
+            <NavBarToggle
+              className={styles.menuExpandIcon}
+              isExpanded={menuOpen}
+              onClick={() => {
+                reportInteraction('grafana_navigation_expanded');
+                setMenuOpen(true);
+              }}
+            />
+
+            <NavBarMenuPortalContainer />
+
+            <NavBarItemWithoutMenu
+              elClassName={styles.grafanaLogoInner}
+              label={homeItem.text}
+              className={styles.grafanaLogo}
+              url={homeItem.url}
+              onClick={homeItem.onClick}
+            >
+              <Branding.MenuLogo />
+            </NavBarItemWithoutMenu>
+
+            <NavBarScrollContainer>
+              <ul className={styles.itemList}>
+                <NavBarItem className={styles.search} isActive={activeItem === searchItem} link={searchItem} />
+
+                {coreItems.map((link, index) => (
+                  <NavBarItem
+                    key={`${link.id}-${index}`}
+                    isActive={isMatchOrChildMatch(link, activeItem)}
+                    link={{ ...link, subTitle: undefined }}
+                  />
+                ))}
+
+                {pluginItems.length > 0 &&
+                  pluginItems.map((link, index) => (
+                    <NavBarItem
+                      key={`${link.id}-${index}`}
+                      isActive={isMatchOrChildMatch(link, activeItem)}
+                      link={link}
+                    />
+                  ))}
+
+                {configItems.map((link, index) => (
+                  <NavBarItem
+                    key={`${link.id}-${index}`}
+                    isActive={isMatchOrChildMatch(link, activeItem)}
+                    reverseMenuDirection
+                    link={link}
+                    className={cx({ [styles.verticalSpacer]: index === 0 })}
+                  />
+                ))}
+              </ul>
+            </NavBarScrollContainer>
+          </FocusScope>
+        </NavBarContext.Provider>
+      </nav>
+      {showSwitcherModal && <OrgSwitcher onDismiss={toggleSwitcherModal} />}
+      {(menuOpen || menuAnimationInProgress) && (
+        <div className={styles.menuWrapper}>
+          <NavBarMenu
+            activeItem={activeItem}
+            isOpen={menuOpen}
+            setMenuAnimationInProgress={setMenuAnimationInProgress}
+            navItems={[homeItem, searchItem, ...coreItems, ...pluginItems, ...configItems]}
+            onClose={() => setMenuOpen(false)}
+          />
+        </div>
+      )}
+    </div>
   );
 });
 
 NavBar.displayName = 'NavBar';
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  sidemenu: css`
-    border-right: 1px solid ${theme.components.panel.borderColor};
-    display: flex;
-    flex-direction: column;
-    position: fixed;
-    width: ${theme.components.sidemenu.width}px;
-    z-index: ${theme.zIndex.sidemenu};
+  navWrapper: css({
+    position: 'relative',
+    display: 'flex',
 
-    ${theme.breakpoints.up('md')} {
-      background-color: ${theme.colors.background.primary};
-      position: relative;
-    }
+    '.sidemenu-hidden &': {
+      display: 'none',
+    },
+  }),
+  sidemenu: css({
+    label: 'sidemenu',
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: theme.colors.background.primary,
+    zIndex: theme.zIndex.sidemenu,
+    padding: `${theme.spacing(1)} 0`,
+    position: 'relative',
+    width: theme.components.sidemenu.width,
+    borderRight: `1px solid ${theme.colors.border.weak}`,
 
-    .sidemenu-hidden & {
-      display: none;
-    }
+    [theme.breakpoints.down('md')]: {
+      height: theme.spacing(7),
+      position: 'fixed',
+      paddingTop: '0px',
+      backgroundColor: 'inherit',
+      borderRight: 0,
+    },
+  }),
+  mobileSidemenuLogo: css({
+    alignItems: 'center',
+    cursor: 'pointer',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: theme.spacing(2),
 
-    .sidemenu-open--xs & {
-      background-color: ${theme.colors.background.primary};
-      box-shadow: ${theme.shadows.z1};
-      height: auto;
-      position: absolute;
-      width: 100%;
-    }
-  `,
-  homeLogo: css`
-    display: none;
-    min-height: ${theme.components.sidemenu.width}px;
+    [theme.breakpoints.up('md')]: {
+      display: 'none',
+    },
+  }),
+  itemList: css({
+    backgroundColor: 'inherit',
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
 
-    &:focus-visible,
-    &:hover {
-      background-color: ${theme.colors.action.hover};
-    }
+    [theme.breakpoints.down('md')]: {
+      visibility: 'hidden',
+    },
+  }),
+  grafanaLogo: css({
+    alignItems: 'stretch',
+    display: 'flex',
+    flexShrink: 0,
+    height: theme.spacing(6),
+    justifyContent: 'stretch',
 
-    &:focus-visible {
-      box-shadow: none;
-      color: ${theme.colors.text.primary};
-      outline: 2px solid ${theme.colors.primary.main};
-      outline-offset: -2px;
-      transition: none;
-    }
+    [theme.breakpoints.down('md')]: {
+      visibility: 'hidden',
+    },
+  }),
+  grafanaLogoInner: css({
+    alignItems: 'center',
+    display: 'flex',
+    height: '100%',
+    justifyContent: 'center',
+    width: '100%',
 
-    img {
-      width: ${theme.spacing(3.5)};
-    }
+    '> div': {
+      height: 'auto',
+      width: 'auto',
+    },
+  }),
+  search: css({
+    display: 'none',
+    marginTop: 0,
 
-    ${theme.breakpoints.up('md')} {
-      align-items: center;
-      display: flex;
-      justify-content: center;
-    }
-  `,
-  closeButton: css`
-    display: none;
-
-    .sidemenu-open--xs & {
-      display: block;
-      font-size: ${theme.typography.fontSize}px;
-    }
-  `,
-  mobileSidemenuLogo: css`
-    align-items: center;
-    cursor: pointer;
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    padding: ${theme.spacing(2)};
-
-    ${theme.breakpoints.up('md')} {
-      display: none;
-    }
-  `,
+    [theme.breakpoints.up('md')]: {
+      display: 'grid',
+    },
+  }),
+  verticalSpacer: css({
+    marginTop: 'auto',
+  }),
+  hideFromMobile: css({
+    [theme.breakpoints.down('md')]: {
+      display: 'none',
+    },
+  }),
+  menuWrapper: css({
+    position: 'fixed',
+    display: 'grid',
+    gridAutoFlow: 'column',
+    height: '100%',
+    zIndex: theme.zIndex.sidemenu,
+  }),
+  menuExpandIcon: css({
+    position: 'absolute',
+    top: '43px',
+    right: '0px',
+    transform: `translateX(50%)`,
+  }),
+  menuPortalContainer: css({
+    zIndex: theme.zIndex.sidemenu,
+  }),
 });

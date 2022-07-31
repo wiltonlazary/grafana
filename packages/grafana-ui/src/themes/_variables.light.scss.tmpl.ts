@@ -1,8 +1,10 @@
 /* eslint-disable max-len */
 
-import { renderGeneratedFileBanner } from '../utils/generatedFileBanner';
-import { styleMixins } from '.';
 import { GrafanaTheme2 } from '@grafana/data';
+
+import { renderGeneratedFileBanner } from '../utils/generatedFileBanner';
+
+import { styleMixins } from '.';
 
 export const lightThemeVarsTemplate = (theme: GrafanaTheme2) =>
   `${renderGeneratedFileBanner('grafana-ui/src/themes/light.ts', 'grafana-ui/src/themes/_variable.light.scss.tmpl.ts')}
@@ -10,6 +12,9 @@ export const lightThemeVarsTemplate = (theme: GrafanaTheme2) =>
 // --------------------------------------------------
 
 $theme-name: light;
+
+$colors-action-hover: ${theme.colors.action.hover};
+$colors-action-selected: ${theme.colors.action.selected};
 
 // New Colors
 // -------------------------
@@ -102,8 +107,8 @@ $text-blue: ${theme.v1.colors.textBlue};
 $text-shadow-faint: none;
 
 // gradients
-$brand-gradient-horizontal: linear-gradient(to right, #f05a28 30%, #fbca0a 99%);
-$brand-gradient-vertical: linear-gradient(#f05a28 30%, #fbca0a 99%);
+$brand-gradient-horizontal: ${theme.colors.gradients.brandHorizontal};
+$brand-gradient-vertical: ${theme.colors.gradients.brandVertical};
 
 // Links
 // -------------------------
@@ -293,6 +298,7 @@ $graph-tooltip-bg: $gray-5;
 
 $tooltipArrowWidth: 5px;
 $tooltipLinkColor: lighten($tooltipColor, 5%);
+$tooltipExternalLinkColor: #6E9FFF;
 
 $popover-error-bg: $btn-danger-bg;
 $popover-help-bg: $tooltipBackground;
@@ -308,7 +314,7 @@ $checkboxImageUrl: '../img/checkbox_white.png';
 $info-box-border-color: $blue-base;
 
 // footer
-$footer-link-color: $gray-3;
+$footer-link-color: $gray-1;
 $footer-link-hover: $dark-2;
 
 // json explorer

@@ -4,13 +4,14 @@ import (
 	"strings"
 
 	"github.com/grafana/grafana/pkg/infra/log"
+	"github.com/grafana/grafana/pkg/infra/tracing"
 	"github.com/grafana/grafana/pkg/setting"
+	"github.com/grafana/grafana/pkg/web"
 	"github.com/prometheus/client_golang/prometheus"
-	"gopkg.in/macaron.v1"
 )
 
 type ReqContext struct {
-	*macaron.Context
+	*web.Context
 	*SignedInUser
 	UserToken *UserToken
 
@@ -20,7 +21,8 @@ type ReqContext struct {
 	SkipCache      bool
 	Logger         log.Logger
 	// RequestNonce is a cryptographic request identifier for use with Content Security Policy.
-	RequestNonce string
+	RequestNonce          string
+	IsPublicDashboardView bool
 
 	PerfmonTimer   prometheus.Summary
 	LookupTokenErr error
@@ -30,10 +32,11 @@ type ReqContext struct {
 func (ctx *ReqContext) Handle(cfg *setting.Cfg, status int, title string, err error) {
 	data := struct {
 		Title     string
+		AppTitle  string
 		AppSubUrl string
 		Theme     string
 		ErrorMsg  error
-	}{title, cfg.AppSubURL, "dark", nil}
+	}{title, "Grafana", cfg.AppSubURL, "dark", nil}
 	if err != nil {
 		ctx.Logger.Error(title, "error", err)
 		if setting.Env != setting.Prod {
@@ -50,9 +53,11 @@ func (ctx *ReqContext) IsApiRequest() bool {
 
 func (ctx *ReqContext) JsonApiErr(status int, message string, err error) {
 	resp := make(map[string]interface{})
+	traceID := tracing.TraceIDFromContext(ctx.Req.Context(), false)
 
 	if err != nil {
-		ctx.Logger.Error(message, "error", err)
+		resp["traceID"] = traceID
+		ctx.Logger.Error(message, "error", err, "traceID", traceID)
 		if setting.Env != setting.Prod {
 			resp["error"] = err.Error()
 		}

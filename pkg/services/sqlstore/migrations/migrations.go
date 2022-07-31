@@ -1,6 +1,8 @@
 package migrations
 
 import (
+	"github.com/grafana/grafana/pkg/services/featuremgmt"
+	"github.com/grafana/grafana/pkg/services/sqlstore/migrations/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/sqlstore/migrations/ualert"
 	. "github.com/grafana/grafana/pkg/services/sqlstore/migrator"
 )
@@ -9,6 +11,9 @@ import (
 // 1. Never change a migration that is committed and pushed to main
 // 2. Always add new migrations (to change or undo previous migrations)
 // 3. Some migrations are not yet written (rename column, table, drop table, index etc)
+// 4. Putting migrations behind feature flags is no longer recommended as broken
+//    migrations may not be caught by integration tests unless feature flags are
+//    specifically added
 
 type OSSMigrations struct {
 }
@@ -37,7 +42,7 @@ func (*OSSMigrations) AddMigration(mg *Migrator) {
 	addTestDataMigrations(mg)
 	addDashboardVersionMigration(mg)
 	addTeamMigrations(mg)
-	addDashboardAclMigrations(mg) // Do NOT add more migrations to this function.
+	addDashboardACLMigrations(mg) // Do NOT add more migrations to this function.
 	addTagMigration(mg)
 	addLoginAttemptMigrations(mg)
 	addUserAuthMigrations(mg)
@@ -48,11 +53,50 @@ func (*OSSMigrations) AddMigration(mg *Migrator) {
 	ualert.AddTablesMigrations(mg)
 	ualert.AddDashAlertMigration(mg)
 	addLibraryElementsMigrations(mg)
-	if mg.Cfg != nil || mg.Cfg.IsLiveConfigEnabled() {
-		addLiveChannelMigrations(mg)
+	if mg.Cfg != nil && mg.Cfg.IsFeatureToggleEnabled != nil {
+		if mg.Cfg.IsFeatureToggleEnabled(featuremgmt.FlagLiveConfig) {
+			addLiveChannelMigrations(mg)
+		}
+		if mg.Cfg.IsFeatureToggleEnabled(featuremgmt.FlagDashboardPreviews) {
+			addDashboardThumbsMigrations(mg)
+		}
 	}
+
 	ualert.RerunDashAlertMigration(mg)
+	addSecretsMigration(mg)
 	addKVStoreMigrations(mg)
+	ualert.AddDashboardUIDPanelIDMigration(mg)
+	accesscontrol.AddMigration(mg)
+	addQueryHistoryMigrations(mg)
+
+	accesscontrol.AddTeamMembershipMigrations(mg)
+	accesscontrol.AddDashboardPermissionsMigrator(mg)
+	accesscontrol.AddAlertingPermissionsMigrator(mg)
+
+	addQueryHistoryStarMigrations(mg)
+
+	addCorrelationsMigrations(mg)
+
+	if mg.Cfg != nil && mg.Cfg.IsFeatureToggleEnabled != nil {
+		if mg.Cfg.IsFeatureToggleEnabled(featuremgmt.FlagDashboardComments) || mg.Cfg.IsFeatureToggleEnabled(featuremgmt.FlagAnnotationComments) {
+			addCommentGroupMigrations(mg)
+			addCommentMigrations(mg)
+		}
+	}
+
+	addEntityEventsTableMigration(mg)
+
+	addPublicDashboardMigration(mg)
+	ualert.CreateDefaultFoldersForAlertingMigration(mg)
+	addDbFileStorageMigration(mg)
+
+	accesscontrol.AddManagedPermissionsMigration(mg, accesscontrol.ManagedPermissionsMigrationID)
+	accesscontrol.AddManagedFolderAlertActionsMigration(mg)
+	accesscontrol.AddActionNameMigrator(mg)
+	addPlaylistUIDMigration(mg)
+
+	ualert.UpdateRuleGroupIndexMigration(mg)
+	accesscontrol.AddManagedFolderAlertActionsRepeatMigration(mg)
 }
 
 func addMigrationLogMigrations(mg *Migrator) {

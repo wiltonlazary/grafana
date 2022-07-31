@@ -1,7 +1,9 @@
-import { Task, TaskRunner } from './task';
-import { useSpinner } from '../utils/useSpinner';
 import fs = require('fs');
 import path = require('path');
+
+import { useSpinner } from '../utils/useSpinner';
+
+import { Task, TaskRunner } from './task';
 
 interface UpdatePluginTask {}
 
@@ -12,7 +14,7 @@ const updateCiConfig = () =>
       fs.mkdirSync(ciConfigPath);
     }
 
-    const sourceFile = path.join('node_modules/@grafana/toolkit/config/circleci', 'config.yml');
+    const sourceFile = require.resolve('@grafana/toolkit/config/circleci/config.yml');
     const destFile = path.join(ciConfigPath, 'config.yml');
     fs.copyFileSync(sourceFile, destFile);
   });

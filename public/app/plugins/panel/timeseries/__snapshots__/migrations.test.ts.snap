@@ -12,7 +12,7 @@ Object {
         "lineInterpolation": "stepAfter",
         "lineWidth": 5,
         "showPoints": "never",
-        "spanNulls": true,
+        "spanNulls": false,
       },
       "nullValueMode": "null",
       "unit": "short",
@@ -44,9 +44,11 @@ Object {
       ],
       "displayMode": "table",
       "placement": "bottom",
+      "showLegend": true,
     },
     "tooltip": Object {
-      "mode": "single",
+      "mode": "multi",
+      "sort": "none",
     },
   },
 }
@@ -71,9 +73,11 @@ Object {
       ],
       "displayMode": "list",
       "placement": "bottom",
+      "showLegend": true,
     },
     "tooltip": Object {
       "mode": "single",
+      "sort": "none",
     },
   },
 }
@@ -96,9 +100,11 @@ Object {
       "calcs": Array [],
       "displayMode": "list",
       "placement": "bottom",
+      "showLegend": true,
     },
     "tooltip": Object {
       "mode": "single",
+      "sort": "none",
     },
   },
 }
@@ -117,7 +123,7 @@ Object {
         "lineInterpolation": "stepAfter",
         "lineWidth": 1,
         "showPoints": "never",
-        "spanNulls": true,
+        "spanNulls": false,
       },
       "nullValueMode": "null",
       "unit": "short",
@@ -138,6 +144,21 @@ Object {
           },
         ],
       },
+      Object {
+        "matcher": Object {
+          "id": "byName",
+          "options": "B-series",
+        },
+        "properties": Array [
+          Object {
+            "id": "color",
+            "value": Object {
+              "fixedColor": "rgba(16, 72, 170, 0.77)",
+              "mode": "fixed",
+            },
+          },
+        ],
+      },
     ],
   },
   "options": Object {
@@ -151,9 +172,11 @@ Object {
       ],
       "displayMode": "table",
       "placement": "bottom",
+      "showLegend": true,
     },
     "tooltip": Object {
-      "mode": "single",
+      "mode": "multi",
+      "sort": "none",
     },
   },
 }
@@ -172,7 +195,7 @@ Object {
         "lineInterpolation": "stepAfter",
         "lineWidth": 1,
         "showPoints": "never",
-        "spanNulls": true,
+        "spanNulls": false,
       },
       "nullValueMode": "null",
       "unit": "short",
@@ -193,6 +216,21 @@ Object {
           },
         ],
       },
+      Object {
+        "matcher": Object {
+          "id": "byRegexp",
+          "options": "/.*Status: 2[0-9]+.*/i",
+        },
+        "properties": Array [
+          Object {
+            "id": "color",
+            "value": Object {
+              "fixedColor": "rgba(16, 72, 170, 0.77)",
+              "mode": "fixed",
+            },
+          },
+        ],
+      },
     ],
   },
   "options": Object {
@@ -206,9 +244,11 @@ Object {
       ],
       "displayMode": "table",
       "placement": "bottom",
+      "showLegend": true,
     },
     "tooltip": Object {
-      "mode": "single",
+      "mode": "multi",
+      "sort": "none",
     },
   },
 }
@@ -233,9 +273,11 @@ Object {
       "calcs": Array [],
       "displayMode": "list",
       "placement": "bottom",
+      "showLegend": true,
     },
     "tooltip": Object {
       "mode": "single",
+      "sort": "none",
     },
   },
 }
@@ -253,7 +295,7 @@ Object {
         "lineInterpolation": "stepAfter",
         "lineWidth": 5,
         "showPoints": "never",
-        "spanNulls": true,
+        "spanNulls": false,
         "stacking": Object {
           "group": "A",
           "mode": "normal",
@@ -319,9 +361,11 @@ Object {
       ],
       "displayMode": "table",
       "placement": "bottom",
+      "showLegend": true,
     },
     "tooltip": Object {
-      "mode": "single",
+      "mode": "multi",
+      "sort": "none",
     },
   },
 }
@@ -339,7 +383,7 @@ Object {
         "lineInterpolation": "stepAfter",
         "lineWidth": 5,
         "showPoints": "never",
-        "spanNulls": true,
+        "spanNulls": false,
         "stacking": Object {
           "group": "A",
           "mode": "normal",
@@ -375,9 +419,11 @@ Object {
       ],
       "displayMode": "table",
       "placement": "bottom",
+      "showLegend": true,
     },
     "tooltip": Object {
-      "mode": "single",
+      "mode": "multi",
+      "sort": "none",
     },
   },
 }
@@ -396,7 +442,7 @@ Object {
         "lineInterpolation": "stepAfter",
         "lineWidth": 1,
         "showPoints": "never",
-        "spanNulls": true,
+        "spanNulls": false,
       },
       "displayName": "DISPLAY NAME",
       "nullValueMode": "null",
@@ -415,9 +461,11 @@ Object {
       ],
       "displayMode": "table",
       "placement": "bottom",
+      "showLegend": true,
     },
     "tooltip": Object {
-      "mode": "single",
+      "mode": "multi",
+      "sort": "none",
     },
   },
 }
@@ -435,7 +483,7 @@ Object {
         "lineInterpolation": "stepAfter",
         "lineWidth": 5,
         "showPoints": "never",
-        "spanNulls": true,
+        "spanNulls": false,
       },
       "nullValueMode": "null",
       "unit": "short",
@@ -463,11 +511,63 @@ Object {
       "calcs": Array [],
       "displayMode": "list",
       "placement": "bottom",
+      "showLegend": true,
     },
     "tooltip": Object {
-      "mode": "single",
+      "mode": "multi",
+      "sort": "none",
     },
   },
+}
+`;
+
+exports[`Graph Migrations transforms should preserve "constant" transform 1`] = `
+Object {
+  "defaults": Object {
+    "custom": Object {
+      "drawStyle": "points",
+      "spanNulls": false,
+    },
+  },
+  "overrides": Array [
+    Object {
+      "matcher": Object {
+        "id": "byName",
+        "options": "out",
+      },
+      "properties": Array [
+        Object {
+          "id": "custom.transform",
+          "value": "constant",
+        },
+      ],
+    },
+  ],
+}
+`;
+
+exports[`Graph Migrations transforms should preserve "negative-Y" transform 1`] = `
+Object {
+  "defaults": Object {
+    "custom": Object {
+      "drawStyle": "points",
+      "spanNulls": false,
+    },
+  },
+  "overrides": Array [
+    Object {
+      "matcher": Object {
+        "id": "byName",
+        "options": "out",
+      },
+      "properties": Array [
+        Object {
+          "id": "custom.transform",
+          "value": "negative-Y",
+        },
+      ],
+    },
+  ],
 }
 `;
 
@@ -494,7 +594,7 @@ Object {
           "type": "log",
         },
         "showPoints": "never",
-        "spanNulls": true,
+        "spanNulls": false,
       },
       "decimals": 3,
       "max": 1000,
@@ -548,10 +648,37 @@ Object {
       "calcs": Array [],
       "displayMode": "list",
       "placement": "bottom",
+      "showLegend": true,
     },
     "tooltip": Object {
-      "mode": "single",
+      "mode": "multi",
+      "sort": "none",
     },
   },
+}
+`;
+
+exports[`Graph Migrations x axis should hide x axis 1`] = `
+Object {
+  "defaults": Object {
+    "custom": Object {
+      "drawStyle": "points",
+      "spanNulls": false,
+    },
+  },
+  "overrides": Array [
+    Object {
+      "matcher": Object {
+        "id": "byType",
+        "options": "time",
+      },
+      "properties": Array [
+        Object {
+          "id": "custom.axisPlacement",
+          "value": "hidden",
+        },
+      ],
+    },
+  ],
 }
 `;

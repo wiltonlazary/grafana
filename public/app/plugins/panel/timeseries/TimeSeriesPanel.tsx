@@ -1,16 +1,20 @@
-import { Field, PanelProps } from '@grafana/data';
-import { config } from '@grafana/runtime';
-import { TooltipDisplayMode } from '@grafana/schema';
-import { usePanelContext, TimeSeries, TooltipPlugin, ZoomPlugin } from '@grafana/ui';
-import { getFieldLinksForExplore } from 'app/features/explore/utils/links';
 import React, { useMemo } from 'react';
+
+import { Field, PanelProps } from '@grafana/data';
+import { PanelDataErrorView } from '@grafana/runtime';
+import { TooltipDisplayMode } from '@grafana/schema';
+import { usePanelContext, TimeSeries, TooltipPlugin, ZoomPlugin, KeyboardPlugin } from '@grafana/ui';
+import { config } from 'app/core/config';
+import { getFieldLinksForExplore } from 'app/features/explore/utils/links';
+
+import { AnnotationEditorPlugin } from './plugins/AnnotationEditorPlugin';
 import { AnnotationsPlugin } from './plugins/AnnotationsPlugin';
 import { ContextMenuPlugin } from './plugins/ContextMenuPlugin';
 import { ExemplarsPlugin } from './plugins/ExemplarsPlugin';
-import { TimeSeriesOptions } from './types';
-import { prepareGraphableFields } from './utils';
-import { AnnotationEditorPlugin } from './plugins/AnnotationEditorPlugin';
+import { OutsideRangePlugin } from './plugins/OutsideRangePlugin';
 import { ThresholdControlsPlugin } from './plugins/ThresholdControlsPlugin';
+import { TimeSeriesOptions } from './types';
+import { getTimezones, prepareGraphableFields } from './utils';
 
 interface TimeSeriesPanelProps extends PanelProps<TimeSeriesOptions> {}
 
@@ -24,6 +28,7 @@ export const TimeSeriesPanel: React.FC<TimeSeriesPanelProps> = ({
   fieldConfig,
   onChangeTimeRange,
   replaceVariables,
+  id,
 }) => {
   const { sync, canAddAnnotations, onThresholdsChange, canEditThresholds, onSplitOpen } = usePanelContext();
 
@@ -31,13 +36,18 @@ export const TimeSeriesPanel: React.FC<TimeSeriesPanelProps> = ({
     return getFieldLinksForExplore({ field, rowIndex, splitOpenFn: onSplitOpen, range: timeRange });
   };
 
-  const { frames, warn } = useMemo(() => prepareGraphableFields(data?.series, config.theme2), [data]);
+  const frames = useMemo(() => prepareGraphableFields(data.series, config.theme2, timeRange), [data, timeRange]);
+  const timezones = useMemo(() => getTimezones(options.timezones, timeZone), [options.timezones, timeZone]);
 
-  if (!frames || warn) {
+  if (!frames) {
     return (
-      <div className="panel-empty">
-        <p>{warn ?? 'No data found in response'}</p>
-      </div>
+      <PanelDataErrorView
+        panelId={id}
+        fieldConfig={fieldConfig}
+        data={data}
+        needsTimeField={true}
+        needsNumberField={true}
+      />
     );
   }
 
@@ -48,7 +58,7 @@ export const TimeSeriesPanel: React.FC<TimeSeriesPanelProps> = ({
       frames={frames}
       structureRev={data.structureRev}
       timeRange={timeRange}
-      timeZone={timeZone}
+      timeZones={timezones}
       width={width}
       height={height}
       legend={options.legend}
@@ -56,12 +66,14 @@ export const TimeSeriesPanel: React.FC<TimeSeriesPanelProps> = ({
       {(config, alignedDataFrame) => {
         return (
           <>
+            <KeyboardPlugin config={config} />
             <ZoomPlugin config={config} onZoom={onChangeTimeRange} />
             {options.tooltip.mode === TooltipDisplayMode.None || (
               <TooltipPlugin
                 data={alignedDataFrame}
                 config={config}
                 mode={options.tooltip.mode}
+                sortOrder={options.tooltip.sort}
                 sync={sync}
                 timeZone={timeZone}
               />
@@ -71,39 +83,45 @@ export const TimeSeriesPanel: React.FC<TimeSeriesPanelProps> = ({
               <AnnotationsPlugin annotations={data.annotations} config={config} timeZone={timeZone} />
             )}
             {/* Enables annotations creation*/}
-            <AnnotationEditorPlugin data={alignedDataFrame} timeZone={timeZone} config={config}>
-              {({ startAnnotating }) => {
-                return (
-                  <ContextMenuPlugin
-                    data={alignedDataFrame}
-                    config={config}
-                    timeZone={timeZone}
-                    replaceVariables={replaceVariables}
-                    defaultItems={
-                      enableAnnotationCreation
-                        ? [
+            {enableAnnotationCreation ? (
+              <AnnotationEditorPlugin data={alignedDataFrame} timeZone={timeZone} config={config}>
+                {({ startAnnotating }) => {
+                  return (
+                    <ContextMenuPlugin
+                      data={alignedDataFrame}
+                      config={config}
+                      timeZone={timeZone}
+                      replaceVariables={replaceVariables}
+                      defaultItems={[
+                        {
+                          items: [
                             {
-                              items: [
-                                {
-                                  label: 'Add annotation',
-                                  ariaLabel: 'Add annotation',
-                                  icon: 'comment-alt',
-                                  onClick: (e, p) => {
-                                    if (!p) {
-                                      return;
-                                    }
-                                    startAnnotating({ coords: p.coords });
-                                  },
-                                },
-                              ],
+                              label: 'Add annotation',
+                              ariaLabel: 'Add annotation',
+                              icon: 'comment-alt',
+                              onClick: (e, p) => {
+                                if (!p) {
+                                  return;
+                                }
+                                startAnnotating({ coords: p.coords });
+                              },
                             },
-                          ]
-                        : []
-                    }
-                  />
-                );
-              }}
-            </AnnotationEditorPlugin>
+                          ],
+                        },
+                      ]}
+                    />
+                  );
+                }}
+              </AnnotationEditorPlugin>
+            ) : (
+              <ContextMenuPlugin
+                data={alignedDataFrame}
+                config={config}
+                timeZone={timeZone}
+                replaceVariables={replaceVariables}
+                defaultItems={[]}
+              />
+            )}
             {data.annotations && (
               <ExemplarsPlugin
                 config={config}
@@ -120,6 +138,8 @@ export const TimeSeriesPanel: React.FC<TimeSeriesPanelProps> = ({
                 onThresholdsChange={onThresholdsChange}
               />
             )}
+
+            <OutsideRangePlugin config={config} onChangeTimeRange={onChangeTimeRange} />
           </>
         );
       }}

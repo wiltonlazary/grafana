@@ -1,9 +1,11 @@
-import { stylesFactory } from '../../themes';
-import { GrafanaTheme2 } from '@grafana/data';
-import { css as cssCore } from '@emotion/react';
 import { css } from '@emotion/css';
+import { css as cssCore } from '@emotion/react';
 
-export const getStyles = stylesFactory((theme: GrafanaTheme2, isHorizontal: boolean) => {
+import { GrafanaTheme2 } from '@grafana/data';
+
+import { stylesFactory } from '../../themes';
+
+export const getStyles = stylesFactory((theme: GrafanaTheme2, isHorizontal: boolean, hasMarks = false) => {
   const { spacing } = theme;
   const railColor = theme.colors.border.strong;
   const trackColor = theme.colors.primary.main;
@@ -14,7 +16,8 @@ export const getStyles = stylesFactory((theme: GrafanaTheme2, isHorizontal: bool
   return {
     container: css`
       width: 100%;
-      margin: ${isHorizontal ? 'none' : `${spacing(1, 3, 1, 1)}`};
+      margin: ${isHorizontal ? 'inherit' : `${spacing(1, 3, 1, 1)}`};
+      padding-bottom: ${isHorizontal && hasMarks ? theme.spacing(1) : 'inherit'};
       height: ${isHorizontal ? 'auto' : '100%'};
     `,
     slider: css`
@@ -22,6 +25,16 @@ export const getStyles = stylesFactory((theme: GrafanaTheme2, isHorizontal: bool
         display: flex;
         flex-grow: 1;
         margin-left: 7px; // half the size of the handle to align handle to the left on 0 value
+      }
+      .rc-slider-mark {
+        top: ${theme.spacing(1.75)};
+      }
+      .rc-slider-mark-text {
+        color: ${theme.colors.text.disabled};
+        font-size: ${theme.typography.bodySmall.fontSize};
+      }
+      .rc-slider-mark-text-active {
+        color: ${theme.colors.text.primary};
       }
       .rc-slider-vertical .rc-slider-handle {
         margin-top: -10px;
@@ -35,10 +48,16 @@ export const getStyles = stylesFactory((theme: GrafanaTheme2, isHorizontal: bool
       .rc-slider-handle:hover,
       .rc-slider-handle:active,
       .rc-slider-handle:focus,
-      .rc-slider-handle-click-focused:focus,
-      .rc-slider-dot-active {
+      .rc-slider-handle-click-focused:focus {
         ${hoverSyle};
       }
+
+      .rc-slider-dot,
+      .rc-slider-dot-active {
+        background-color: ${theme.colors.text.primary};
+        border-color: ${theme.colors.text.primary};
+      }
+
       .rc-slider-track {
         background-color: ${trackColor};
       }

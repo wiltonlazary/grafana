@@ -1,4 +1,5 @@
 import React from 'react';
+
 import PromQueryField from './PromQueryField';
 import { PromQueryEditorProps } from './types';
 
@@ -14,7 +15,6 @@ export function PromQueryEditorForAlerting(props: PromQueryEditorProps) {
       history={[]}
       range={range}
       data={data}
-      placeholder="Enter a PromQL query"
       data-testid={testIds.editor}
     />
   );

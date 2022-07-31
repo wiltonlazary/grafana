@@ -1,24 +1,78 @@
-import { DataQuery, SelectableValue } from '@grafana/data';
-import { AwsAuthDataSourceSecureJsonData, AwsAuthDataSourceJsonData } from '@grafana/aws-sdk';
+import { AwsAuthDataSourceJsonData, AwsAuthDataSourceSecureJsonData } from '@grafana/aws-sdk';
+import { DataQuery, DataSourceRef, SelectableValue } from '@grafana/data';
 
-export interface CloudWatchMetricsQuery extends DataQuery {
+import {
+  QueryEditorArrayExpression,
+  QueryEditorFunctionExpression,
+  QueryEditorPropertyExpression,
+} from './expressions';
+
+export interface Dimensions {
+  [key: string]: string | string[];
+}
+
+export interface MultiFilters {
+  [key: string]: string[];
+}
+
+export type CloudWatchQueryMode = 'Metrics' | 'Logs' | 'Annotations';
+
+export enum MetricQueryType {
+  'Search',
+  'Query',
+}
+
+export enum MetricEditorMode {
+  'Builder',
+  'Code',
+}
+
+export type Direction = 'ASC' | 'DESC';
+
+export interface SQLExpression {
+  select?: QueryEditorFunctionExpression;
+  from?: QueryEditorPropertyExpression | QueryEditorFunctionExpression;
+  where?: QueryEditorArrayExpression;
+  groupBy?: QueryEditorArrayExpression;
+  orderBy?: QueryEditorFunctionExpression;
+  orderByDirection?: string;
+  limit?: number;
+}
+
+export interface CloudWatchMetricsQuery extends MetricStat, DataQuery {
   queryMode?: 'Metrics';
+  metricQueryType?: MetricQueryType;
+  metricEditorMode?: MetricEditorMode;
 
+  //common props
   id: string;
+
+  alias?: string;
+  label?: string;
+
+  // Math expression query
+  expression?: string;
+
+  sqlExpression?: string;
+  sql?: SQLExpression;
+}
+
+export interface MetricStat {
   region: string;
   namespace: string;
-  expression: string;
-
-  metricName: string;
-  dimensions: { [key: string]: string | string[] };
-  statistic: string;
+  metricName?: string;
+  dimensions?: Dimensions;
+  matchExact?: boolean;
+  period?: string;
+  statistic?: string;
   /**
    * @deprecated use statistic
    */
   statistics?: string[];
-  period: string;
-  alias: string;
-  matchExact: boolean;
+}
+
+export interface CloudWatchMathExpressionQuery extends DataQuery {
+  expression: string;
 }
 
 export type LogAction =
@@ -40,7 +94,6 @@ export enum CloudWatchLogsQueryStatus {
 
 export interface CloudWatchLogsQuery extends DataQuery {
   queryMode: 'Logs';
-
   id: string;
   region: string;
   expression?: string;
@@ -48,18 +101,13 @@ export interface CloudWatchLogsQuery extends DataQuery {
   statsGroups?: string[];
 }
 
-export type CloudWatchQuery = CloudWatchMetricsQuery | CloudWatchLogsQuery;
+export type CloudWatchQuery = CloudWatchMetricsQuery | CloudWatchLogsQuery | CloudWatchAnnotationQuery;
 
-export const isCloudWatchLogsQuery = (cloudwatchQuery: CloudWatchQuery): cloudwatchQuery is CloudWatchLogsQuery =>
-  (cloudwatchQuery as CloudWatchLogsQuery).queryMode === 'Logs';
-
-export interface CloudWatchAnnotationQuery extends CloudWatchMetricsQuery {
-  enable: boolean;
-  name: string;
-  iconColor: string;
-  prefixMatching: boolean;
-  actionPrefix: string;
-  alarmNamePrefix: string;
+export interface CloudWatchAnnotationQuery extends MetricStat, DataQuery {
+  queryMode: 'Annotations';
+  prefixMatching?: boolean;
+  actionPrefix?: string;
+  alarmNamePrefix?: string;
 }
 
 export type SelectableStrings = Array<SelectableValue<string>>;
@@ -69,9 +117,11 @@ export interface CloudWatchJsonData extends AwsAuthDataSourceJsonData {
   database?: string;
   customMetricsNamespaces?: string;
   endpoint?: string;
-
+  // Time string like 15s, 10m etc, see rangeUtils.intervalToMs.
+  logsTimeout?: string;
   // Used to create links if logs contain traceId.
   tracingDatasourceUid?: string;
+  defaultLogGroups?: string[];
 }
 
 export interface CloudWatchSecureJsonData extends AwsAuthDataSourceSecureJsonData {
@@ -114,6 +164,12 @@ export interface QueryStatistics {
 
 export type QueryStatus = 'Scheduled' | 'Running' | 'Complete' | 'Failed' | 'Cancelled' | string;
 
+export type CloudWatchLogsRequest =
+  | GetLogEventsRequest
+  | StartQueryRequest
+  | DescribeLogGroupsRequest
+  | GetLogGroupFieldsRequest;
+
 export interface GetLogEventsRequest {
   /**
    * The name of the log group.
@@ -143,6 +199,7 @@ export interface GetLogEventsRequest {
    * If the value is true, the earliest log events are returned first. If the value is false, the latest log events are returned first. The default value is false. If you are using nextToken in this operation, you must specify true for startFromHead.
    */
   startFromHead?: boolean;
+  region?: string;
 }
 
 export interface GetQueryResultsResponse {
@@ -174,7 +231,7 @@ export interface DescribeLogGroupsRequest {
    */
   limit?: number;
   refId?: string;
-  region?: string;
+  region: string;
 }
 
 export interface TSDBResponse<T = any> {
@@ -248,6 +305,7 @@ export interface GetLogGroupFieldsRequest {
    * The time to set as the center of the query. If you specify time, the 8 minutes before and 8 minutes after this time are searched. If you omit time, the past 15 minutes are queried. The time value is specified as epoch time, the number of seconds since January 1, 1970, 00:00:00 UTC.
    */
   time?: number;
+  region: string;
 }
 
 export interface LogGroupField {
@@ -278,14 +336,6 @@ export interface StartQueryRequest {
    */
   logGroupNames?: string[];
   /**
-   * The beginning of the time range to query. The range is inclusive, so the specified start time is included in the query. Specified as epoch time, the number of seconds since January 1, 1970, 00:00:00 UTC.
-   */
-  startTime: number;
-  /**
-   * The end of the time range to query. The range is inclusive, so the specified end time is included in the query. Specified as epoch time, the number of seconds since January 1, 1970, 00:00:00 UTC.
-   */
-  endTime: number;
-  /**
    * The query string to use. For more information, see CloudWatch Logs Insights Query Syntax.
    */
   queryString: string;
@@ -293,6 +343,8 @@ export interface StartQueryRequest {
    * The maximum number of log events to return in the query. If the query string uses the fields command, only the specified fields and their values are returned. The default is 1000.
    */
   limit?: number;
+  refId: string;
+  region: string;
 }
 export interface StartQueryResponse {
   /**
@@ -310,28 +362,80 @@ export interface MetricRequest {
 
 export interface MetricQuery {
   [key: string]: any;
-  datasourceId: number;
+  datasource?: DataSourceRef;
   refId?: string;
   maxDataPoints?: number;
   intervalMs?: number;
 }
 
-// interface TsdbQuery {
-// 	TimeRange *TimeRange
-// 	Queries   []*Query
-// 	Debug     bool
-// }
+export enum VariableQueryType {
+  Regions = 'regions',
+  Namespaces = 'namespaces',
+  Metrics = 'metrics',
+  DimensionKeys = 'dimensionKeys',
+  DimensionValues = 'dimensionValues',
+  EBSVolumeIDs = 'ebsVolumeIDs',
+  EC2InstanceAttributes = 'ec2InstanceAttributes',
+  ResourceArns = 'resourceARNs',
+  Statistics = 'statistics',
+  LogGroups = 'logGroups',
+}
 
-// type Query struct {
-// 	RefId         string
-// 	Model         *simplejson.Json
-// 	DataSource    *models.DataSource
-// 	MaxDataPoints int64
-// 	IntervalMs    int64
-// }
+export interface OldVariableQuery extends DataQuery {
+  queryType: VariableQueryType;
+  namespace: string;
+  region: string;
+  metricName: string;
+  dimensionKey: string;
+  dimensionFilters: string;
+  ec2Filters: string;
+  instanceID: string;
+  attributeName: string;
+  resourceType: string;
+  tags: string;
+}
 
-export interface ExecutedQueryPreview {
+export interface VariableQuery extends DataQuery {
+  queryType: VariableQueryType;
+  namespace: string;
+  region: string;
+  metricName: string;
+  dimensionKey: string;
+  dimensionFilters?: Dimensions;
+  ec2Filters?: MultiFilters;
+  instanceID: string;
+  attributeName: string;
+  resourceType: string;
+  tags?: MultiFilters;
+  logGroupPrefix?: string;
+}
+
+export interface LegacyAnnotationQuery extends MetricStat, DataQuery {
+  actionPrefix: string;
+  alarmNamePrefix: string;
+  alias: string;
+  builtIn: number;
+  datasource: any;
+  dimensions: Dimensions;
+  enable: boolean;
+  expression: string;
+  hide: boolean;
+  iconColor: string;
   id: string;
-  executedQuery: string;
+  matchExact: boolean;
+  metricName: string;
+  name: string;
+  namespace: string;
   period: string;
+  prefixMatching: boolean;
+  region: string;
+  statistic: string;
+  statistics: string[];
+  target: {
+    limit: number;
+    matchAny: boolean;
+    tags: any[];
+    type: string;
+  };
+  type: string;
 }

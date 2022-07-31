@@ -1,4 +1,5 @@
 import React from 'react';
+
 import { AnnotationQuery, DataSourceApi } from '@grafana/data';
 import { AngularComponent, getAngularLoader } from '@grafana/runtime';
 
@@ -52,7 +53,10 @@ export class AngularEditorLoader extends React.PureComponent<Props> {
     }
 
     const loader = getAngularLoader();
-    const template = `<plugin-component ng-if="!ctrl.currentDatasource.annotations" type="annotations-query-ctrl"> </plugin-component>`;
+    // NOTE: BE CAREFUL HERE
+    // If this template contains an ng-if, then it won't be removed correctly by AngularLoader.
+    // The compiledElem will only contain the single comment node (e.g. <!-- ngIf !ctrl.currentDatasource.annotations -->)
+    const template = `<plugin-component type="annotations-query-ctrl"> </plugin-component>`;
     const scopeProps = {
       ctrl: {
         currentDatasource: this.props.datasource,

@@ -1,12 +1,22 @@
+import React from 'react';
+
 import {
   FieldConfigEditorBuilder,
   FieldOverrideEditorProps,
   FieldType,
   identityOverrideProcessor,
 } from '@grafana/data';
-import React from 'react';
-import { graphFieldOptions, HorizontalGroup, IconButton, Input, RadioButtonGroup, Tooltip } from '../..';
 import { StackingConfig, StackingMode } from '@grafana/schema';
+
+import {
+  GraphFieldConfig,
+  graphFieldOptions,
+  HorizontalGroup,
+  IconButton,
+  Input,
+  RadioButtonGroup,
+  Tooltip,
+} from '../..';
 
 export const StackingEditor: React.FC<FieldOverrideEditorProps<StackingConfig, any>> = ({
   value,
@@ -49,7 +59,7 @@ export const StackingEditor: React.FC<FieldOverrideEditorProps<StackingConfig, a
 };
 
 export function addStackingConfig(
-  builder: FieldConfigEditorBuilder<{ stacking: StackingConfig }>,
+  builder: FieldConfigEditorBuilder<GraphFieldConfig>,
   defaultConfig?: StackingConfig,
   category = ['Graph styles']
 ) {

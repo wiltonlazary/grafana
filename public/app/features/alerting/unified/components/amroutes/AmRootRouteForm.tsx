@@ -1,6 +1,8 @@
-import React, { FC, useState } from 'react';
 import { cx } from '@emotion/css';
+import React, { FC, useState } from 'react';
+
 import { Button, Collapse, Field, Form, Input, InputControl, Link, MultiSelect, Select, useStyles2 } from '@grafana/ui';
+
 import { AmRouteReceiver, FormAmRoute } from '../../types/amroutes';
 import {
   mapMultiSelectValueToStrings,
@@ -8,9 +10,11 @@ import {
   optionalPositiveInteger,
   stringToSelectableValue,
   stringsToSelectableValues,
+  commonGroupByOptions,
 } from '../../utils/amroutes';
 import { makeAMLink } from '../../utils/misc';
 import { timeOptions } from '../../utils/time';
+
 import { getFormStyles } from './formStyles';
 
 export interface AmRootRouteFormProps {
@@ -33,7 +37,7 @@ export const AmRootRouteForm: FC<AmRootRouteFormProps> = ({
   const [groupByOptions, setGroupByOptions] = useState(stringsToSelectableValues(routes.groupBy));
 
   return (
-    <Form defaultValues={routes} onSubmit={onSave}>
+    <Form defaultValues={{ ...routes, overrideTimings: true, overrideGrouping: true }} onSubmit={onSave}>
       {({ control, errors, setValue }) => (
         <>
           <Field label="Default contact point" invalid={!!errors.receiver} error={errors.receiver?.message}>
@@ -42,7 +46,7 @@ export const AmRootRouteForm: FC<AmRootRouteFormProps> = ({
                 <InputControl
                   render={({ field: { onChange, ref, ...field } }) => (
                     <Select
-                      menuShouldPortal
+                      aria-label="Default contact point"
                       {...field}
                       className={styles.input}
                       onChange={(value) => onChange(mapSelectValueToString(value))}
@@ -54,7 +58,10 @@ export const AmRootRouteForm: FC<AmRootRouteFormProps> = ({
                   rules={{ required: { value: true, message: 'Required.' } }}
                 />
                 <span>or</span>
-                <Link href={makeAMLink('/alerting/notifications/receivers/new', alertManagerSourceName)}>
+                <Link
+                  className={styles.linkText}
+                  href={makeAMLink('/alerting/notifications/receivers/new', alertManagerSourceName)}
+                >
                   Create a contact point
                 </Link>
               </div>
@@ -69,7 +76,7 @@ export const AmRootRouteForm: FC<AmRootRouteFormProps> = ({
             <InputControl
               render={({ field: { onChange, ref, ...field } }) => (
                 <MultiSelect
-                  menuShouldPortal
+                  aria-label="Group by"
                   {...field}
                   allowCustomValue
                   className={styles.input}
@@ -80,7 +87,7 @@ export const AmRootRouteForm: FC<AmRootRouteFormProps> = ({
                     setValue('groupBy', [...field.value, opt]);
                   }}
                   onChange={(value) => onChange(mapMultiSelectValueToStrings(value))}
-                  options={groupByOptions}
+                  options={[...commonGroupByOptions, groupByOptions]}
                 />
               )}
               control={control}
@@ -89,6 +96,7 @@ export const AmRootRouteForm: FC<AmRootRouteFormProps> = ({
           </Field>
           <Collapse
             collapsible
+            className={styles.collapse}
             isOpen={isTimingOptionsExpanded}
             label="Timing options"
             onToggle={setIsTimingOptionsExpanded}
@@ -104,7 +112,7 @@ export const AmRootRouteForm: FC<AmRootRouteFormProps> = ({
                 <div className={cx(styles.container, styles.timingContainer)}>
                   <InputControl
                     render={({ field, fieldState: { invalid } }) => (
-                      <Input {...field} className={styles.smallInput} invalid={invalid} />
+                      <Input {...field} className={styles.smallInput} invalid={invalid} placeholder={'30'} />
                     )}
                     control={control}
                     name="groupWaitValue"
@@ -115,11 +123,11 @@ export const AmRootRouteForm: FC<AmRootRouteFormProps> = ({
                   <InputControl
                     render={({ field: { onChange, ref, ...field } }) => (
                       <Select
-                        menuShouldPortal
                         {...field}
                         className={styles.input}
                         onChange={(value) => onChange(mapSelectValueToString(value))}
                         options={timeOptions}
+                        aria-label="Group wait type"
                       />
                     )}
                     control={control}
@@ -139,7 +147,7 @@ export const AmRootRouteForm: FC<AmRootRouteFormProps> = ({
                 <div className={cx(styles.container, styles.timingContainer)}>
                   <InputControl
                     render={({ field, fieldState: { invalid } }) => (
-                      <Input {...field} className={styles.smallInput} invalid={invalid} />
+                      <Input {...field} className={styles.smallInput} invalid={invalid} placeholder={'5'} />
                     )}
                     control={control}
                     name="groupIntervalValue"
@@ -150,11 +158,11 @@ export const AmRootRouteForm: FC<AmRootRouteFormProps> = ({
                   <InputControl
                     render={({ field: { onChange, ref, ...field } }) => (
                       <Select
-                        menuShouldPortal
                         {...field}
                         className={styles.input}
                         onChange={(value) => onChange(mapSelectValueToString(value))}
                         options={timeOptions}
+                        aria-label="Group interval type"
                       />
                     )}
                     control={control}
@@ -174,7 +182,7 @@ export const AmRootRouteForm: FC<AmRootRouteFormProps> = ({
                 <div className={cx(styles.container, styles.timingContainer)}>
                   <InputControl
                     render={({ field, fieldState: { invalid } }) => (
-                      <Input {...field} className={styles.smallInput} invalid={invalid} />
+                      <Input {...field} className={styles.smallInput} invalid={invalid} placeholder="4" />
                     )}
                     control={control}
                     name="repeatIntervalValue"
@@ -185,12 +193,12 @@ export const AmRootRouteForm: FC<AmRootRouteFormProps> = ({
                   <InputControl
                     render={({ field: { onChange, ref, ...field } }) => (
                       <Select
-                        menuShouldPortal
                         {...field}
                         className={styles.input}
                         menuPlacement="top"
                         onChange={(value) => onChange(mapSelectValueToString(value))}
                         options={timeOptions}
+                        aria-label="Repeat interval type"
                       />
                     )}
                     control={control}

@@ -1,4 +1,5 @@
 import React from 'react';
+
 import { OptionsPaneCategory } from './OptionsPaneCategory';
 import { OptionsPaneItemDescriptor } from './OptionsPaneItemDescriptor';
 
@@ -37,6 +38,19 @@ export class OptionsPaneCategoryDescriptor {
     return this;
   }
 
+  getCategory(name: string): OptionsPaneCategoryDescriptor {
+    let sub = this.categories.find((c) => c.props.id === name);
+    if (sub) {
+      return sub;
+    }
+    sub = new OptionsPaneCategoryDescriptor({
+      title: name,
+      id: name,
+    });
+    this.addCategory(sub);
+    return sub;
+  }
+
   render(searchQuery?: string) {
     if (this.props.customRender) {
       return this.props.customRender();
@@ -44,8 +58,8 @@ export class OptionsPaneCategoryDescriptor {
 
     return (
       <OptionsPaneCategory key={this.props.title} {...this.props}>
-        {this.items.map((item) => item.render())}
-        {this.categories.map((category) => category.render())}
+        {this.items.map((item) => item.render(searchQuery))}
+        {this.categories.map((category) => category.render(searchQuery))}
       </OptionsPaneCategory>
     );
   }

@@ -1,8 +1,12 @@
+import formatDuration from 'date-fns/formatDuration';
 import React, { PureComponent } from 'react';
-import { SelectableValue } from '@grafana/data';
-import { ButtonSelect } from '../Dropdown/ButtonSelect';
-import { ButtonGroup, ToolbarButton, ToolbarButtonVariant } from '../Button';
+
+import { SelectableValue, parseDuration } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
+
+import { ButtonGroup } from '../Button';
+import { ButtonSelect } from '../Dropdown/ButtonSelect';
+import { ToolbarButtonVariant, ToolbarButton } from '../ToolbarButton';
 
 // Default intervals used in the refresh picker component
 export const defaultIntervals = ['5s', '10s', '30s', '1m', '5m', '15m', '30m', '1h', '2h', '1d'];
@@ -19,11 +23,24 @@ export interface Props {
   noIntervalPicker?: boolean;
   width?: string;
   primary?: boolean;
+  // These props are used to translate the component
+  offOptionLabelMsg?: string;
+  offOptionAriaLabelMsg?: string;
+  offDescriptionAriaLabelMsg?: string;
+  onDescriptionAriaLabelMsg?: (durationAriaLabel: string | undefined) => string;
 }
 
 export class RefreshPicker extends PureComponent<Props> {
-  static offOption = { label: 'Off', value: '' };
-  static liveOption = { label: 'Live', value: 'LIVE' };
+  static offOption = {
+    label: 'Off',
+    value: '',
+    ariaLabel: 'Turn off auto refresh',
+  };
+  static liveOption = {
+    label: 'Live',
+    value: 'LIVE',
+    ariaLabel: 'Turn on live streaming',
+  };
   static isLive = (refreshInterval?: string): boolean => refreshInterval === RefreshPicker.liveOption.value;
 
   constructor(props: Props) {
@@ -52,26 +69,53 @@ export class RefreshPicker extends PureComponent<Props> {
   }
 
   render() {
-    const { onRefresh, intervals, tooltip, value, text, isLoading, noIntervalPicker } = this.props;
+    const {
+      onRefresh,
+      intervals,
+      tooltip,
+      value,
+      text,
+      isLoading,
+      noIntervalPicker,
+      width,
+      offOptionLabelMsg,
+      offOptionAriaLabelMsg,
+      offDescriptionAriaLabelMsg,
+      onDescriptionAriaLabelMsg,
+    } = this.props;
 
     const currentValue = value || '';
     const variant = this.getVariant();
-    const options = intervalsToOptions({ intervals });
+    const translatedOffOption = {
+      value: RefreshPicker.offOption.value,
+      label: offOptionLabelMsg || RefreshPicker.offOption.label,
+      ariaLabel: offOptionAriaLabelMsg || RefreshPicker.offOption.ariaLabel,
+    };
+    const options = intervalsToOptions({ intervals, offOption: translatedOffOption });
     const option = options.find(({ value }) => value === currentValue);
-    let selectedValue = option || RefreshPicker.offOption;
+    let selectedValue = option || translatedOffOption;
 
-    if (selectedValue.label === RefreshPicker.offOption.label) {
+    if (selectedValue.label === translatedOffOption.label) {
       selectedValue = { value: '' };
     }
+
+    const durationAriaLabel = selectedValue.ariaLabel;
+    const ariaLabel =
+      selectedValue.value === ''
+        ? offDescriptionAriaLabelMsg || 'Auto refresh turned off. Choose refresh time interval'
+        : onDescriptionAriaLabelMsg?.(durationAriaLabel) ||
+          `Choose refresh time interval with current interval ${durationAriaLabel} selected`;
 
     return (
       <ButtonGroup className="refresh-picker">
         <ToolbarButton
+          aria-label={text}
           tooltip={tooltip}
           onClick={onRefresh}
           variant={variant}
           icon={isLoading ? 'fa fa-spinner' : 'sync'}
-          aria-label={selectors.components.RefreshPicker.runButton}
+          style={width ? { width } : undefined}
+          data-testid={selectors.components.RefreshPicker.runButtonV2}
         >
           {text}
         </ToolbarButton>
@@ -81,7 +125,8 @@ export class RefreshPicker extends PureComponent<Props> {
             options={options}
             onChange={this.onChangeSelect as any}
             variant={variant}
-            aria-label={selectors.components.RefreshPicker.intervalButton}
+            data-testid={selectors.components.RefreshPicker.intervalButtonV2}
+            aria-label={ariaLabel}
           />
         )}
       </ButtonGroup>
@@ -89,12 +134,21 @@ export class RefreshPicker extends PureComponent<Props> {
   }
 }
 
-export function intervalsToOptions({ intervals = defaultIntervals }: { intervals?: string[] } = {}): Array<
-  SelectableValue<string>
-> {
-  const intervalsOrDefault = intervals || defaultIntervals;
-  const options = intervalsOrDefault.map((interval) => ({ label: interval, value: interval }));
+export function intervalsToOptions({
+  intervals = defaultIntervals,
+  offOption = RefreshPicker.offOption,
+}: { intervals?: string[]; offOption?: SelectableValue<string> } = {}): Array<SelectableValue<string>> {
+  const options: Array<SelectableValue<string>> = intervals.map((interval) => {
+    const duration = parseDuration(interval);
+    const ariaLabel = formatDuration(duration);
 
-  options.unshift(RefreshPicker.offOption);
+    return {
+      label: interval,
+      value: interval,
+      ariaLabel: ariaLabel,
+    };
+  });
+
+  options.unshift(offOption);
   return options;
 }

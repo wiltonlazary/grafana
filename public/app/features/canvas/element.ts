@@ -1,7 +1,11 @@
 import { ComponentType } from 'react';
-import { PanelOptionsEditorBuilder, RegistryItem } from '@grafana/data';
-import { Anchor, BackgroundConfig, LineConfig, Placement } from './types';
+
+import { RegistryItem } from '@grafana/data';
+import { PanelOptionsSupplier } from '@grafana/data/src/panel/PanelPlugin';
+
 import { DimensionContext } from '../dimensions/context';
+
+import { BackgroundConfig, Constraint, LineConfig, Placement } from './types';
 
 /**
  * This gets saved in panel json
@@ -11,13 +15,14 @@ import { DimensionContext } from '../dimensions/context';
  * @alpha
  */
 export interface CanvasElementOptions<TConfig = any> {
+  name: string; // configured unique display name
   type: string;
 
   // Custom options depending on the type
   config?: TConfig;
 
-  // Standard options avaliable for all elements
-  anchor?: Anchor; // defaults top, left, width and height
+  // Standard options available for all elements
+  constraint?: Constraint; // defaults vertical - top, horizontal - left
   placement?: Placement;
   background?: BackgroundConfig;
   border?: LineConfig;
@@ -26,10 +31,6 @@ export interface CanvasElementOptions<TConfig = any> {
 export interface CanvasElementProps<TConfig = any, TData = any> {
   // Saved config
   config: TConfig;
-
-  // Calculated position info
-  width: number;
-  height: number;
 
   // Raw data
   data?: TData;
@@ -44,13 +45,13 @@ export interface CanvasElementItem<TConfig = any, TData = any> extends RegistryI
   /** The default width/height to use when adding  */
   defaultSize?: Placement;
 
-  defaultConfig: TConfig;
-
   prepareData?: (ctx: DimensionContext, cfg: TConfig) => TData;
 
   /** Component used to draw */
   display: ComponentType<CanvasElementProps<TConfig, TData>>;
 
-  /** Build the configuraiton UI */
-  registerOptionsUI?: (builder: PanelOptionsEditorBuilder<CanvasElementOptions<TConfig>>) => void;
+  getNewOptions: (options?: CanvasElementOptions) => Omit<CanvasElementOptions<TConfig>, 'type' | 'name'>;
+
+  /** Build the configuration UI */
+  registerOptionsUI?: PanelOptionsSupplier<CanvasElementOptions<TConfig>>;
 }

@@ -1,18 +1,9 @@
+import { PluginSignatureStatus, dateTimeParse, PluginError, PluginType, PluginErrorCode } from '@grafana/data';
 import { config } from '@grafana/runtime';
-import { gt } from 'semver';
-import { PluginSignatureStatus, dateTimeParse, PluginError } from '@grafana/data';
-import { contextSrv } from 'app/core/services/context_srv';
-import { getBackendSrv } from 'app/core/services/backend_srv';
 import { Settings } from 'app/core/config';
-import { CatalogPlugin, LocalPlugin, RemotePlugin } from './types';
+import { getBackendSrv } from 'app/core/services/backend_srv';
 
-export function isGrafanaAdmin(): boolean {
-  return config.bootData.user.isGrafanaAdmin;
-}
-
-export function isOrgAdmin() {
-  return contextSrv.hasRole('Admin');
-}
+import { CatalogPlugin, LocalPlugin, RemotePlugin, Version } from './types';
 
 export function mergeLocalsAndRemotes(
   local: LocalPlugin[] = [],
@@ -68,13 +59,10 @@ export function mapRemoteToCatalog(plugin: RemotePlugin, error?: PluginError): C
     updatedAt,
     createdAt: publishedAt,
     status,
-    versionSignatureType,
-    signatureType,
   } = plugin;
 
-  const hasSignature = signatureType !== '' || versionSignatureType !== '';
-  const isDisabled = !!error;
-  const catalogPlugin = {
+  const isDisabled = !!error || isDisabledSecretsPlugin(typeCode);
+  return {
     description,
     downloads,
     id,
@@ -88,10 +76,10 @@ export function mapRemoteToCatalog(plugin: RemotePlugin, error?: PluginError): C
     orgName,
     popularity,
     publishedAt,
-    signature: hasSignature ? PluginSignatureStatus.valid : PluginSignatureStatus.missing,
+    signature: getPluginSignature({ remote: plugin, error }),
     updatedAt,
-    version,
     hasUpdate: false,
+    isPublished: true,
     isInstalled: isDisabled,
     isDisabled: isDisabled,
     isCore: plugin.internal,
@@ -100,7 +88,6 @@ export function mapRemoteToCatalog(plugin: RemotePlugin, error?: PluginError): C
     type: typeCode,
     error: error?.errorCode,
   };
-  return catalogPlugin;
 }
 
 export function mapLocalToCatalog(plugin: LocalPlugin, error?: PluginError): CatalogPlugin {
@@ -108,13 +95,15 @@ export function mapLocalToCatalog(plugin: LocalPlugin, error?: PluginError): Cat
     name,
     info: { description, version, logos, updated, author },
     id,
-    signature,
     dev,
     type,
+    signature,
     signatureOrg,
     signatureType,
+    hasUpdate,
   } = plugin;
 
+  const isDisabled = !!error || isDisabledSecretsPlugin(type);
   return {
     description,
     downloads: 0,
@@ -124,15 +113,16 @@ export function mapLocalToCatalog(plugin: LocalPlugin, error?: PluginError): Cat
     orgName: author.name,
     popularity: 0,
     publishedAt: '',
-    signature,
+    signature: getPluginSignature({ local: plugin, error }),
     signatureOrg,
     signatureType,
     updatedAt: updated,
-    version,
-    hasUpdate: false,
+    installedVersion: version,
+    hasUpdate,
     isInstalled: true,
-    isDisabled: !!error,
+    isDisabled: isDisabled,
     isCore: signature === 'internal',
+    isPublished: false,
     isDev: Boolean(dev),
     isEnterprise: false,
     type,
@@ -140,32 +130,31 @@ export function mapLocalToCatalog(plugin: LocalPlugin, error?: PluginError): Cat
   };
 }
 
+// TODO: change the signature by removing the optionals for local and remote.
 export function mapToCatalogPlugin(local?: LocalPlugin, remote?: RemotePlugin, error?: PluginError): CatalogPlugin {
-  const version = remote?.version || local?.info.version || '';
-  const hasUpdate =
-    local?.hasUpdate || Boolean(remote?.version && local?.info.version && gt(remote?.version, local?.info.version));
+  const installedVersion = local?.info.version;
   const id = remote?.slug || local?.id || '';
-  const hasRemoteSignature = remote?.signatureType || remote?.versionSignatureType;
-  const isDisabled = !!error;
+  const type = local?.type || remote?.typeCode;
+  const isDisabled = !!error || isDisabledSecretsPlugin(type);
 
   let logos = {
-    small: 'https://grafana.com/api/plugins/404notfound/versions/none/logos/small',
-    large: 'https://grafana.com/api/plugins/404notfound/versions/none/logos/large',
+    small: `/public/img/icn-${type}.svg`,
+    large: `/public/img/icn-${type}.svg`,
   };
 
   if (remote) {
     logos = {
-      small: `https://grafana.com/api/plugins/${id}/versions/${version}/logos/small`,
-      large: `https://grafana.com/api/plugins/${id}/versions/${version}/logos/large`,
+      small: `https://grafana.com/api/plugins/${id}/versions/${remote.version}/logos/small`,
+      large: `https://grafana.com/api/plugins/${id}/versions/${remote.version}/logos/large`,
     };
   } else if (local && local.info.logos) {
     logos = local.info.logos;
   }
 
   return {
-    description: remote?.description || local?.info.description || '',
+    description: local?.info.description || remote?.description || '',
     downloads: remote?.downloads || 0,
-    hasUpdate,
+    hasUpdate: local?.hasUpdate || false,
     id,
     info: {
       logos,
@@ -175,21 +164,25 @@ export function mapToCatalogPlugin(local?: LocalPlugin, remote?: RemotePlugin, e
     isEnterprise: remote?.status === 'enterprise',
     isInstalled: Boolean(local) || isDisabled,
     isDisabled: isDisabled,
+    isPublished: true,
+    // TODO<check if we would like to keep preferring the remote version>
     name: remote?.name || local?.name || '',
+    // TODO<check if we would like to keep preferring the remote version>
     orgName: remote?.orgName || local?.info.author.name || '',
     popularity: remote?.popularity || 0,
     publishedAt: remote?.createdAt || '',
-    type: remote?.typeCode || local?.type,
-    signature: local?.signature || (hasRemoteSignature ? PluginSignatureStatus.valid : PluginSignatureStatus.missing),
+    type,
+    signature: getPluginSignature({ local, remote, error }),
     signatureOrg: local?.signatureOrg || remote?.versionSignedByOrgName,
     signatureType: local?.signatureType || remote?.versionSignatureType || remote?.signatureType || undefined,
+    // TODO<check if we would like to keep preferring the remote version>
     updatedAt: remote?.updatedAt || local?.info.updated || '',
-    version,
+    installedVersion,
     error: error?.errorCode,
   };
 }
 
-export const getExternalManageLink = (pluginId: string) => `https://grafana.com/grafana/plugins/${pluginId}`;
+export const getExternalManageLink = (pluginId: string) => `${config.pluginCatalogURL}${pluginId}`;
 
 export enum Sorters {
   nameAsc = 'nameAsc',
@@ -224,6 +217,35 @@ function groupErrorsByPluginId(errors: PluginError[] = []): Record<string, Plugi
   }, {} as Record<string, PluginError | undefined>);
 }
 
+function getPluginSignature(options: {
+  local?: LocalPlugin;
+  remote?: RemotePlugin;
+  error?: PluginError;
+}): PluginSignatureStatus {
+  const { error, local, remote } = options;
+
+  if (error) {
+    switch (error.errorCode) {
+      case PluginErrorCode.invalidSignature:
+        return PluginSignatureStatus.invalid;
+      case PluginErrorCode.missingSignature:
+        return PluginSignatureStatus.missing;
+      case PluginErrorCode.modifiedSignature:
+        return PluginSignatureStatus.modified;
+    }
+  }
+
+  if (local?.signature) {
+    return local.signature;
+  }
+
+  if (remote?.signatureType || remote?.versionSignatureType) {
+    return PluginSignatureStatus.valid;
+  }
+
+  return PluginSignatureStatus.missing;
+}
+
 // Updates the core Grafana config to have the correct list available panels
 export const updatePanels = () =>
   getBackendSrv()
@@ -231,3 +253,32 @@ export const updatePanels = () =>
     .then((settings: Settings) => {
       config.panels = settings.panels;
     });
+
+export function getLatestCompatibleVersion(versions: Version[] | undefined): Version | undefined {
+  if (!versions) {
+    return;
+  }
+  const [latest] = versions.filter((v) => Boolean(v.isCompatible));
+
+  return latest;
+}
+
+export const isInstallControlsEnabled = () => config.pluginAdminEnabled;
+
+export const isLocalPluginVisible = (p: LocalPlugin) => isPluginVisible(p.id);
+
+export const isRemotePluginVisible = (p: RemotePlugin) => isPluginVisible(p.slug);
+
+function isPluginVisible(id: string) {
+  const { pluginCatalogHiddenPlugins }: { pluginCatalogHiddenPlugins: string[] } = config;
+
+  return !pluginCatalogHiddenPlugins.includes(id);
+}
+
+function isDisabledSecretsPlugin(type?: PluginType): boolean {
+  return type === PluginType.secretsmanager && !config.secretsManagerPluginEnabled;
+}
+
+export function isLocalCorePlugin(local?: LocalPlugin): boolean {
+  return Boolean(local?.signature === 'internal');
+}

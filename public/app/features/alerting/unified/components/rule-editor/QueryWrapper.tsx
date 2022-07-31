@@ -1,22 +1,27 @@
-import React, { FC, ReactNode, useState } from 'react';
 import { css } from '@emotion/css';
 import { cloneDeep } from 'lodash';
+import React, { FC, ReactNode, useState } from 'react';
+
 import {
+  CoreApp,
   DataQuery,
   DataSourceInstanceSettings,
   getDefaultRelativeTimeRange,
   GrafanaTheme2,
+  LoadingState,
   PanelData,
   RelativeTimeRange,
   ThresholdsConfig,
 } from '@grafana/data';
 import { RelativeTimeRangePicker, useStyles2 } from '@grafana/ui';
-import { QueryEditorRow } from 'app/features/query/components/QueryEditorRow';
-import { VizWrapper } from './VizWrapper';
 import { isExpressionQuery } from 'app/features/expressions/guards';
+import { QueryEditorRow } from 'app/features/query/components/QueryEditorRow';
+import { AlertQuery } from 'app/types/unified-alerting-dto';
+
 import { TABLE, TIMESERIES } from '../../utils/constants';
 import { SupportedPanelPlugins } from '../PanelPluginsButtonGroup';
-import { AlertQuery } from 'app/types/unified-alerting-dto';
+
+import { VizWrapper } from './VizWrapper';
 
 interface Props {
   data: PanelData;
@@ -69,6 +74,7 @@ export const QueryWrapper: FC<Props> = ({
   return (
     <div className={styles.wrapper}>
       <QueryEditorRow<DataQuery>
+        alerting
         dataSource={dsSettings}
         onChangeDataSource={!isExpression ? (settings) => onChangeDataSource(settings, index) : undefined}
         id={query.refId}
@@ -78,12 +84,13 @@ export const QueryWrapper: FC<Props> = ({
         query={cloneDeep(query.model)}
         onChange={(query) => onChangeQuery(query, index)}
         onRemoveQuery={onRemoveQuery}
-        onAddQuery={onDuplicateQuery}
+        onAddQuery={() => onDuplicateQuery(cloneDeep(query))}
         onRunQuery={onRunQueries}
         queries={queries}
         renderHeaderExtras={() => renderTimePicker(query, index)}
+        app={CoreApp.UnifiedAlerting}
         visualization={
-          data ? (
+          data.state !== LoadingState.NotStarted ? (
             <VizWrapper
               data={data}
               changePanel={changePluginId}
@@ -99,12 +106,16 @@ export const QueryWrapper: FC<Props> = ({
   );
 };
 
+export const EmptyQueryWrapper: FC<{}> = ({ children }) => {
+  const styles = useStyles2(getStyles);
+  return <div className={styles.wrapper}>{children}</div>;
+};
+
 const getStyles = (theme: GrafanaTheme2) => ({
   wrapper: css`
     label: AlertingQueryWrapper;
     margin-bottom: ${theme.spacing(1)};
     border: 1px solid ${theme.colors.border.medium};
     border-radius: ${theme.shape.borderRadius(1)};
-    padding-bottom: ${theme.spacing(1)};
   `,
 });

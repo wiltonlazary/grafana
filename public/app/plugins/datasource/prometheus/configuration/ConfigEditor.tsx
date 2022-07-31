@@ -1,17 +1,27 @@
 import React from 'react';
+
+import { SIGV4ConnectionConfig } from '@grafana/aws-sdk';
+import { DataSourcePluginOptionsEditorProps, DataSourceSettings } from '@grafana/data';
 import { AlertingSettings, DataSourceHttpSettings, Alert } from '@grafana/ui';
-import { DataSourcePluginOptionsEditorProps } from '@grafana/data';
 import { config } from 'app/core/config';
+import { getAllAlertmanagerDataSources } from 'app/features/alerting/unified/utils/alertmanager';
+
 import { PromOptions } from '../types';
+
 import { AzureAuthSettings } from './AzureAuthSettings';
+import { hasCredentials, setDefaultCredentials, resetCredentials } from './AzureCredentialsConfig';
 import { PromSettings } from './PromSettings';
 
 export type Props = DataSourcePluginOptionsEditorProps<PromOptions>;
 export const ConfigEditor = (props: Props) => {
   const { options, onOptionsChange } = props;
+  const alertmanagers = getAllAlertmanagerDataSources();
 
   const azureAuthSettings = {
-    azureAuthEnabled: config.featureToggles['prometheus_azure_auth'] ?? false,
+    azureAuthSupported: !!config.featureToggles.prometheus_azure_auth,
+    getAzureAuthEnabled: (config: DataSourceSettings<any, any>): boolean => hasCredentials(config),
+    setAzureAuthEnabled: (config: DataSourceSettings<any, any>, enabled: boolean) =>
+      enabled ? setDefaultCredentials(config) : resetCredentials(config),
     azureSettingsUI: AzureAuthSettings,
   };
 
@@ -30,9 +40,14 @@ export const ConfigEditor = (props: Props) => {
         onChange={onOptionsChange}
         sigV4AuthToggleEnabled={config.sigV4AuthEnabled}
         azureAuthSettings={azureAuthSettings}
+        renderSigV4Editor={<SIGV4ConnectionConfig {...props}></SIGV4ConnectionConfig>}
       />
 
-      <AlertingSettings<PromOptions> options={options} onOptionsChange={onOptionsChange} />
+      <AlertingSettings<PromOptions>
+        alertmanagerDataSources={alertmanagers}
+        options={options}
+        onOptionsChange={onOptionsChange}
+      />
 
       <PromSettings options={options} onOptionsChange={onOptionsChange} />
     </>

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,7 +17,7 @@ type reloadProvisioningTestCase struct {
 	url          string
 	expectedCode int
 	expectedBody string
-	permissions  []*accesscontrol.Permission
+	permissions  []accesscontrol.Permission
 	exit         bool
 	checkCall    func(mock provisioning.ProvisioningServiceMock)
 }
@@ -27,7 +28,7 @@ func TestAPI_AdminProvisioningReload_AccessControl(t *testing.T) {
 			desc:         "should work for dashboards with specific scope",
 			expectedCode: http.StatusOK,
 			expectedBody: `{"message":"Dashboards config reloaded"}`,
-			permissions: []*accesscontrol.Permission{
+			permissions: []accesscontrol.Permission{
 				{
 					Action: ActionProvisioningReload,
 					Scope:  ScopeProvisionersDashboards,
@@ -42,7 +43,7 @@ func TestAPI_AdminProvisioningReload_AccessControl(t *testing.T) {
 			desc:         "should work for dashboards with broader scope",
 			expectedCode: http.StatusOK,
 			expectedBody: `{"message":"Dashboards config reloaded"}`,
-			permissions: []*accesscontrol.Permission{
+			permissions: []accesscontrol.Permission{
 				{
 					Action: ActionProvisioningReload,
 					Scope:  ScopeProvisionersAll,
@@ -56,7 +57,7 @@ func TestAPI_AdminProvisioningReload_AccessControl(t *testing.T) {
 		{
 			desc:         "should fail for dashboard with wrong scope",
 			expectedCode: http.StatusForbidden,
-			permissions: []*accesscontrol.Permission{
+			permissions: []accesscontrol.Permission{
 				{
 					Action: ActionProvisioningReload,
 					Scope:  "services:noservice",
@@ -75,7 +76,7 @@ func TestAPI_AdminProvisioningReload_AccessControl(t *testing.T) {
 			desc:         "should work for notifications with specific scope",
 			expectedCode: http.StatusOK,
 			expectedBody: `{"message":"Notifications config reloaded"}`,
-			permissions: []*accesscontrol.Permission{
+			permissions: []accesscontrol.Permission{
 				{
 					Action: ActionProvisioningReload,
 					Scope:  ScopeProvisionersNotifications,
@@ -96,7 +97,7 @@ func TestAPI_AdminProvisioningReload_AccessControl(t *testing.T) {
 			desc:         "should work for datasources with specific scope",
 			expectedCode: http.StatusOK,
 			expectedBody: `{"message":"Datasources config reloaded"}`,
-			permissions: []*accesscontrol.Permission{
+			permissions: []accesscontrol.Permission{
 				{
 					Action: ActionProvisioningReload,
 					Scope:  ScopeProvisionersDatasources,
@@ -117,7 +118,7 @@ func TestAPI_AdminProvisioningReload_AccessControl(t *testing.T) {
 			desc:         "should work for plugins with specific scope",
 			expectedCode: http.StatusOK,
 			expectedBody: `{"message":"Plugins config reloaded"}`,
-			permissions: []*accesscontrol.Permission{
+			permissions: []accesscontrol.Permission{
 				{
 					Action: ActionProvisioningReload,
 					Scope:  ScopeProvisionersPlugins,
@@ -134,6 +135,33 @@ func TestAPI_AdminProvisioningReload_AccessControl(t *testing.T) {
 			url:          "/api/admin/provisioning/plugins/reload",
 			exit:         true,
 		},
+		{
+			desc:         "should fail for alerting with no permission",
+			expectedCode: http.StatusForbidden,
+			url:          "/api/admin/provisioning/alerting/reload",
+			exit:         true,
+		},
+		{
+			desc:         "should work for alert rules with specific scope",
+			expectedCode: http.StatusOK,
+			expectedBody: `{"message":"Alerting config reloaded"}`,
+			permissions: []accesscontrol.Permission{
+				{
+					Action: ActionProvisioningReload,
+					Scope:  ScopeProvisionersAlertRules,
+				},
+			},
+			url: "/api/admin/provisioning/alerting/reload",
+			checkCall: func(mock provisioning.ProvisioningServiceMock) {
+				assert.Len(t, mock.Calls.ProvisionAlertRules, 1)
+			},
+		},
+		{
+			desc:         "should fail for alerting with no permission",
+			expectedCode: http.StatusForbidden,
+			url:          "/api/admin/provisioning/alerting/reload",
+			exit:         true,
+		},
 	}
 
 	cfg := setting.NewCfg()
@@ -143,7 +171,7 @@ func TestAPI_AdminProvisioningReload_AccessControl(t *testing.T) {
 			sc, hs := setupAccessControlScenarioContext(t, cfg, test.url, test.permissions)
 
 			// Setup the mock
-			provisioningMock := provisioning.NewProvisioningServiceMock()
+			provisioningMock := provisioning.NewProvisioningServiceMock(context.Background())
 			hs.ProvisioningService = provisioningMock
 
 			sc.resp = httptest.NewRecorder()

@@ -1,3 +1,10 @@
+import { dateTime, ExploreUrlState, LogsSortOrder } from '@grafana/data';
+import { serializeStateToUrlParam } from '@grafana/data/src/utils/url';
+import { RefreshPicker } from '@grafana/ui';
+import store from 'app/core/store';
+
+import { ExploreId } from '../../types';
+
 import {
   buildQueryTransaction,
   clearHistory,
@@ -11,18 +18,13 @@ import {
   getExploreUrl,
   GetExploreUrlArguments,
   getTimeRangeFromUrl,
+  getTimeRange,
 } from './explore';
-import store from 'app/core/store';
-import { dateTime, ExploreUrlState, LogsSortOrder } from '@grafana/data';
-import { RefreshPicker } from '@grafana/ui';
-import { serializeStateToUrlParam } from '@grafana/data/src/utils/url';
-import { ExploreId } from '../../types';
 
 const DEFAULT_EXPLORE_STATE: ExploreUrlState = {
   datasource: '',
   queries: [],
   range: DEFAULT_RANGE,
-  originPanelId: undefined,
 };
 
 describe('state functions', () => {
@@ -113,30 +115,6 @@ describe('state functions', () => {
           '{"expr":"super{foo=\\"x/z\\"}","refId":"B"}],"range":{"from":"now-5h","to":"now"}}'
       );
     });
-
-    it('returns url parameter value for a state object', () => {
-      const state = {
-        ...DEFAULT_EXPLORE_STATE,
-        datasource: 'foo',
-        queries: [
-          {
-            expr: 'metric{test="a/b"}',
-            refId: 'A',
-          },
-          {
-            expr: 'super{foo="x/z"}',
-            refId: 'B',
-          },
-        ],
-        range: {
-          from: 'now-5h',
-          to: 'now',
-        },
-      };
-      expect(serializeStateToUrlParam(state, true)).toBe(
-        '["now-5h","now","foo",{"expr":"metric{test=\\"a/b\\"}","refId":"A"},{"expr":"super{foo=\\"x/z\\"}","refId":"B"}]'
-      );
-    });
   });
 
   describe('interplay', () => {
@@ -164,7 +142,7 @@ describe('state functions', () => {
       expect(state).toMatchObject(parsed);
     });
 
-    it('can parse the compact serialized state into the original state', () => {
+    it('can parse serialized panelsState into the original state', () => {
       const state = {
         ...DEFAULT_EXPLORE_STATE,
         datasource: 'foo',
@@ -182,8 +160,13 @@ describe('state functions', () => {
           from: 'now - 5h',
           to: 'now',
         },
+        panelsState: {
+          trace: {
+            spanId: 'abcdef',
+          },
+        },
       };
-      const serialized = serializeStateToUrlParam(state, true);
+      const serialized = serializeStateToUrlParam(state);
       const parsed = parseUrlState(serialized);
       expect(state).toMatchObject(parsed);
     });
@@ -191,25 +174,23 @@ describe('state functions', () => {
 });
 
 describe('getExploreUrl', () => {
-  const args = ({
+  const args = {
     panel: {
       getSavedId: () => 1,
-    },
-    panelTargets: [{ refId: 'A', expr: 'query1', legendFormat: 'legendFormat1' }],
-    panelDatasource: {
-      name: 'testDataSource',
-      meta: {
-        id: '1',
-      },
+      targets: [{ refId: 'A', expr: 'query1', legendFormat: 'legendFormat1' }],
     },
     datasourceSrv: {
-      get: jest.fn(),
+      get() {
+        return {
+          getRef: jest.fn(),
+        };
+      },
       getDataSourceById: jest.fn(),
     },
     timeSrv: {
       timeRangeForUrl: () => '1',
     },
-  } as unknown) as GetExploreUrlArguments;
+  } as unknown as GetExploreUrlArguments;
 
   it('should omit legendFormat in explore url', () => {
     expect(getExploreUrl(args).then((data) => expect(data).not.toMatch(/legendFormat1/g)));
@@ -243,7 +224,7 @@ describe('hasNonEmptyQuery', () => {
   });
 
   test('should return false if query is empty', () => {
-    expect(hasNonEmptyQuery([{ refId: '1', key: '2', context: 'panel' }])).toBeFalsy();
+    expect(hasNonEmptyQuery([{ refId: '1', key: '2', context: 'panel', datasource: { uid: 'some-ds' } }])).toBeFalsy();
   });
 
   test('should return false if no queries exist', () => {
@@ -302,7 +283,7 @@ describe('getTimeRangeFromUrl', () => {
   it('should parse moment date', () => {
     // convert date strings to moment object
     const range = { from: dateTime('2020-10-22T10:44:33.615Z'), to: dateTime('2020-10-22T10:49:33.615Z') };
-    const result = getTimeRangeFromUrl(range, 'browser');
+    const result = getTimeRangeFromUrl(range, 'browser', 0);
     expect(result.raw).toEqual(range);
   });
 
@@ -311,7 +292,7 @@ describe('getTimeRangeFromUrl', () => {
       from: dateTime('2020-10-22T10:00:00Z').valueOf().toString(),
       to: dateTime('2020-10-22T11:00:00Z').valueOf().toString(),
     };
-    const result = getTimeRangeFromUrl(range, 'browser');
+    const result = getTimeRangeFromUrl(range, 'browser', 0);
     expect(result.from.valueOf()).toEqual(dateTime('2020-10-22T10:00:00Z').valueOf());
     expect(result.to.valueOf()).toEqual(dateTime('2020-10-22T11:00:00Z').valueOf());
     expect(result.raw.from.valueOf()).toEqual(dateTime('2020-10-22T10:00:00Z').valueOf());
@@ -323,11 +304,24 @@ describe('getTimeRangeFromUrl', () => {
       from: dateTime('2020-10-22T10:00:00Z').toISOString(),
       to: dateTime('2020-10-22T11:00:00Z').toISOString(),
     };
-    const result = getTimeRangeFromUrl(range, 'browser');
+    const result = getTimeRangeFromUrl(range, 'browser', 0);
     expect(result.from.valueOf()).toEqual(dateTime('2020-10-22T10:00:00Z').valueOf());
     expect(result.to.valueOf()).toEqual(dateTime('2020-10-22T11:00:00Z').valueOf());
     expect(result.raw.from.valueOf()).toEqual(dateTime('2020-10-22T10:00:00Z').valueOf());
     expect(result.raw.to.valueOf()).toEqual(dateTime('2020-10-22T11:00:00Z').valueOf());
+  });
+});
+
+describe('getTimeRange', () => {
+  describe('should flip from and to when from is after to', () => {
+    const rawRange = {
+      from: 'now',
+      to: 'now-6h',
+    };
+
+    const range = getTimeRange('utc', rawRange, 0);
+
+    expect(range.from.isBefore(range.to)).toBe(true);
   });
 });
 

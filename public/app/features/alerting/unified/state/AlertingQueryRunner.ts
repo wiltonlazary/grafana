@@ -1,6 +1,7 @@
 import { Observable, of, OperatorFunction, ReplaySubject, Unsubscribable } from 'rxjs';
 import { catchError, map, share } from 'rxjs/operators';
 import { v4 as uuidv4 } from 'uuid';
+
 import {
   dataFrameFromJSON,
   DataFrameJSON,
@@ -11,14 +12,15 @@ import {
   TimeRange,
   withLoadingIndicator,
 } from '@grafana/data';
-import { FetchResponse, toDataQueryError } from '@grafana/runtime';
+import { FetchResponse, getDataSourceSrv, toDataQueryError } from '@grafana/runtime';
 import { BackendSrv, getBackendSrv } from 'app/core/services/backend_srv';
+import { isExpressionQuery } from 'app/features/expressions/guards';
+import { cancelNetworkRequestsOnUnsubscribe } from 'app/features/query/state/processing/canceler';
+import { setStructureRevision } from 'app/features/query/state/processing/revision';
 import { preProcessPanelData } from 'app/features/query/state/runRequest';
 import { AlertQuery } from 'app/types/unified-alerting-dto';
+
 import { getTimeRangeForExpression } from '../utils/timeRange';
-import { isExpressionQuery } from 'app/features/expressions/guards';
-import { setStructureRevision } from 'app/features/query/state/processing/revision';
-import { cancelNetworkRequestsOnUnsubscribe } from 'app/features/query/state/processing/canceler';
 
 export interface AlertingQueryResult {
   frames: DataFrameJSON[];
@@ -32,7 +34,7 @@ export class AlertingQueryRunner {
   private subscription?: Unsubscribable;
   private lastResult: Record<string, PanelData>;
 
-  constructor(private backendSrv = getBackendSrv()) {
+  constructor(private backendSrv = getBackendSrv(), private dataSourceSrv = getDataSourceSrv()) {
     this.subject = new ReplaySubject(1);
     this.lastResult = {};
   }
@@ -41,10 +43,22 @@ export class AlertingQueryRunner {
     return this.subject.asObservable();
   }
 
-  run(queries: AlertQuery[]) {
+  async run(queries: AlertQuery[]) {
     if (queries.length === 0) {
       const empty = initialState(queries, LoadingState.Done);
       return this.subject.next(empty);
+    }
+
+    // do not execute if one more of the queries are not runnable,
+    // for example not completely configured
+    for (const query of queries) {
+      if (!isExpressionQuery(query.model)) {
+        const ds = await this.dataSourceSrv.get(query.datasourceUid);
+        if (ds.filterQuery && !ds.filterQuery(query.model)) {
+          const empty = initialState(queries, LoadingState.Done);
+          return this.subject.next(empty);
+        }
+      }
     }
 
     this.subscription = runRequest(this.backendSrv, queries).subscribe({

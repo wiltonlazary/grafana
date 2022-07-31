@@ -1,7 +1,10 @@
-import { CartesianCoords2D, DataFrame, TimeZone } from '@grafana/data';
-import { PlotSelection, UPlotConfigBuilder } from '@grafana/ui';
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { useMountedState } from 'react-use';
+import uPlot from 'uplot';
+
+import { CartesianCoords2D, DataFrame, TimeZone } from '@grafana/data';
+import { PlotSelection, UPlotConfigBuilder } from '@grafana/ui';
+
 import { AnnotationEditor } from './annotations/AnnotationEditor';
 
 type StartAnnotatingFn = (props: {

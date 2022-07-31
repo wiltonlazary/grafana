@@ -1,14 +1,13 @@
-import React from 'react';
-import { InlineField, Select, Input } from '@grafana/ui';
-import { Terms } from '../aggregations';
-import { useDispatch } from '../../../../hooks/useStatelessReducer';
-import { inlineFieldProps } from '.';
-import { bucketAggregationConfig, orderByOptions, orderOptions, sizeOptions } from '../utils';
-import { useCreatableSelectPersistedBehaviour } from '../../../hooks/useCreatableSelectPersistedBehaviour';
-import { changeBucketAggregationSetting } from '../state/actions';
-import { useQuery } from '../../ElasticsearchQueryContext';
+import { uniqueId } from 'lodash';
+import React, { useRef } from 'react';
+
 import { SelectableValue } from '@grafana/data';
+import { InlineField, Select, Input } from '@grafana/ui';
+
+import { useDispatch } from '../../../../hooks/useStatelessReducer';
 import { describeMetric } from '../../../../utils';
+import { useCreatableSelectPersistedBehaviour } from '../../../hooks/useCreatableSelectPersistedBehaviour';
+import { useQuery } from '../../ElasticsearchQueryContext';
 import {
   ExtendedStatMetaType,
   ExtendedStats,
@@ -16,7 +15,11 @@ import {
   MetricAggregation,
   Percentiles,
 } from '../../MetricAggregationsEditor/aggregations';
-import { uniqueId } from 'lodash';
+import { Terms } from '../aggregations';
+import { changeBucketAggregationSetting } from '../state/actions';
+import { bucketAggregationConfig, orderByOptions, orderOptions, sizeOptions } from '../utils';
+
+import { inlineFieldProps } from '.';
 
 interface Props {
   bucketAgg: Terms;
@@ -25,6 +28,7 @@ interface Props {
 export const TermsSettingsEditor = ({ bucketAgg }: Props) => {
   const { metrics } = useQuery();
   const orderBy = createOrderByOptions(metrics);
+  const { current: baseId } = useRef(uniqueId('es-terms-'));
 
   const dispatch = useDispatch();
 
@@ -32,7 +36,7 @@ export const TermsSettingsEditor = ({ bucketAgg }: Props) => {
     <>
       <InlineField label="Order" {...inlineFieldProps}>
         <Select
-          menuShouldPortal
+          inputId={`${baseId}-order`}
           onChange={(e) =>
             dispatch(changeBucketAggregationSetting({ bucketAgg, settingName: 'order', newValue: e.value }))
           }
@@ -43,13 +47,13 @@ export const TermsSettingsEditor = ({ bucketAgg }: Props) => {
 
       <InlineField label="Size" {...inlineFieldProps}>
         <Select
-          menuShouldPortal
+          inputId={`${baseId}-size`}
           // TODO: isValidNewOption should only allow numbers & template variables
           {...useCreatableSelectPersistedBehaviour({
             options: sizeOptions,
             value: bucketAgg.settings?.size || bucketAggregationConfig.terms.defaultSettings?.size,
-            onChange(newValue) {
-              dispatch(changeBucketAggregationSetting({ bucketAgg, settingName: 'size', newValue }));
+            onChange({ value }) {
+              dispatch(changeBucketAggregationSetting({ bucketAgg, settingName: 'size', newValue: value }));
             },
           })}
         />
@@ -57,6 +61,7 @@ export const TermsSettingsEditor = ({ bucketAgg }: Props) => {
 
       <InlineField label="Min Doc Count" {...inlineFieldProps}>
         <Input
+          id={`${baseId}-min_doc_count`}
           onBlur={(e) =>
             dispatch(
               changeBucketAggregationSetting({ bucketAgg, settingName: 'min_doc_count', newValue: e.target.value })
@@ -70,8 +75,7 @@ export const TermsSettingsEditor = ({ bucketAgg }: Props) => {
 
       <InlineField label="Order By" {...inlineFieldProps}>
         <Select
-          inputId={uniqueId('es-terms-')}
-          menuShouldPortal
+          inputId={`${baseId}-order_by`}
           onChange={(e) =>
             dispatch(changeBucketAggregationSetting({ bucketAgg, settingName: 'orderBy', newValue: e.value }))
           }
@@ -82,6 +86,7 @@ export const TermsSettingsEditor = ({ bucketAgg }: Props) => {
 
       <InlineField label="Missing" {...inlineFieldProps}>
         <Input
+          id={`${baseId}-missing`}
           onBlur={(e) =>
             dispatch(changeBucketAggregationSetting({ bucketAgg, settingName: 'missing', newValue: e.target.value }))
           }

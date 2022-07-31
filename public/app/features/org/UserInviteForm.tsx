@@ -1,6 +1,8 @@
-import React, { FC } from 'react';
+import React from 'react';
+
+import { locationUtil } from '@grafana/data';
+import { locationService } from '@grafana/runtime';
 import {
-  HorizontalGroup,
   Button,
   LinkButton,
   Input,
@@ -9,12 +11,13 @@ import {
   Form,
   Field,
   InputControl,
+  FieldSet,
+  Stack,
 } from '@grafana/ui';
 import { getConfig } from 'app/core/config';
-import { OrgRole } from 'app/types';
-import { getBackendSrv, locationService } from '@grafana/runtime';
-import { appEvents } from 'app/core/core';
-import { AppEvents, locationUtil } from '@grafana/data';
+import { OrgRole, useDispatch } from 'app/types';
+
+import { addInvitee } from '../invites/state/actions';
 
 const roles = [
   { label: 'Viewer', value: OrgRole.Viewer },
@@ -22,7 +25,7 @@ const roles = [
   { label: 'Admin', value: OrgRole.Admin },
 ];
 
-interface FormModel {
+export interface FormModel {
   role: OrgRole;
   name: string;
   loginOrEmail?: string;
@@ -30,23 +33,19 @@ interface FormModel {
   email: string;
 }
 
-interface Props {}
+const defaultValues: FormModel = {
+  name: '',
+  email: '',
+  role: OrgRole.Editor,
+  sendEmail: true,
+};
 
-export const UserInviteForm: FC<Props> = ({}) => {
+export const UserInviteForm = () => {
+  const dispatch = useDispatch();
+
   const onSubmit = async (formData: FormModel) => {
-    try {
-      await getBackendSrv().post('/api/org/invites', formData);
-    } catch (err) {
-      appEvents.emit(AppEvents.alertError, ['Failed to send invitation.', err.message]);
-    }
+    await dispatch(addInvitee(formData)).unwrap();
     locationService.push('/org/users/');
-  };
-
-  const defaultValues: FormModel = {
-    name: '',
-    email: '',
-    role: OrgRole.Editor,
-    sendEmail: true,
   };
 
   return (
@@ -54,32 +53,34 @@ export const UserInviteForm: FC<Props> = ({}) => {
       {({ register, control, errors }) => {
         return (
           <>
-            <Field
-              invalid={!!errors.loginOrEmail}
-              error={!!errors.loginOrEmail ? 'Email or username is required' : undefined}
-              label="Email or username"
-            >
-              <Input {...register('loginOrEmail', { required: true })} placeholder="email@example.com" />
-            </Field>
-            <Field invalid={!!errors.name} label="Name">
-              <Input {...register('name')} placeholder="(optional)" />
-            </Field>
-            <Field invalid={!!errors.role} label="Role">
-              <InputControl
-                render={({ field: { ref, ...field } }) => <RadioButtonGroup {...field} options={roles} />}
-                control={control}
-                name="role"
-              />
-            </Field>
-            <Field label="Send invite email">
-              <Switch {...register('sendEmail')} />
-            </Field>
-            <HorizontalGroup>
+            <FieldSet>
+              <Field
+                invalid={!!errors.loginOrEmail}
+                error={!!errors.loginOrEmail ? 'Email or username is required' : undefined}
+                label="Email or username"
+              >
+                <Input {...register('loginOrEmail', { required: true })} placeholder="email@example.com" />
+              </Field>
+              <Field invalid={!!errors.name} label="Name">
+                <Input {...register('name')} placeholder="(optional)" />
+              </Field>
+              <Field invalid={!!errors.role} label="Role">
+                <InputControl
+                  render={({ field: { ref, ...field } }) => <RadioButtonGroup {...field} options={roles} />}
+                  control={control}
+                  name="role"
+                />
+              </Field>
+              <Field label="Send invite email">
+                <Switch id="send-email-switch" {...register('sendEmail')} />
+              </Field>
+            </FieldSet>
+            <Stack>
               <Button type="submit">Submit</Button>
               <LinkButton href={locationUtil.assureBaseUrl(getConfig().appSubUrl + '/org/users')} variant="secondary">
                 Back
               </LinkButton>
-            </HorizontalGroup>
+            </Stack>
           </>
         );
       }}

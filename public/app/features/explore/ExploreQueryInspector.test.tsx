@@ -1,8 +1,10 @@
+import { render, screen, fireEvent } from '@testing-library/react';
 import React, { ComponentProps } from 'react';
 import { Observable } from 'rxjs';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { TimeRange, LoadingState } from '@grafana/data';
+
+import { TimeRange, LoadingState, InternalTimeZones } from '@grafana/data';
 import { ExploreId } from 'app/types';
+
 import { ExploreQueryInspector } from './ExploreQueryInspector';
 
 type ExploreQueryInspectorProps = ComponentProps<typeof ExploreQueryInspector>;
@@ -33,10 +35,19 @@ const setup = (propOverrides = {}) => {
     width: 100,
     exploreId: ExploreId.left,
     onClose: jest.fn(),
+    timeZone: InternalTimeZones.utc,
     queryResponse: {
       state: LoadingState.Done,
       series: [],
       timeRange: {} as TimeRange,
+      graphFrames: [],
+      logsFrames: [],
+      tableFrames: [],
+      traceFrames: [],
+      nodeGraphFrames: [],
+      graphResult: null,
+      logsResult: null,
+      tableResult: null,
     },
     runQueries: jest.fn(),
     ...propOverrides,

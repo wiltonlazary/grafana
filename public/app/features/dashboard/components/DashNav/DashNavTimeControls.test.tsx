@@ -1,8 +1,10 @@
-import React from 'react';
 import { render } from '@testing-library/react';
-import { DashNavTimeControls } from './DashNavTimeControls';
-import { DashboardModel } from '../../state/DashboardModel';
+import React from 'react';
+
 import { getDashboardModel } from '../../../../../test/helpers/getDashboardModel';
+import { DashboardModel } from '../../state/DashboardModel';
+
+import { DashNavTimeControls } from './DashNavTimeControls';
 
 describe('DashNavTimeControls', () => {
   let dashboardModel: DashboardModel;
@@ -34,14 +36,14 @@ describe('DashNavTimeControls', () => {
     const container = render(
       <DashNavTimeControls dashboard={dashboardModel} onChangeTimeZone={jest.fn()} key="time-controls" />
     );
-    expect(container.queryByLabelText(/RefreshPicker run button/i)).toBeInTheDocument();
+    expect(container.queryByLabelText(/Refresh dashboard/i)).toBeInTheDocument();
   });
 
   it('renders RefreshPicker with interval button in panel view', () => {
     const container = render(
       <DashNavTimeControls dashboard={dashboardModel} onChangeTimeZone={jest.fn()} key="time-controls" />
     );
-    expect(container.queryByLabelText(/RefreshPicker interval button/i)).toBeInTheDocument();
+    expect(container.queryByLabelText(/Choose refresh time interval/i)).toBeInTheDocument();
   });
 
   it('should not render RefreshPicker interval button in panel edit', () => {
@@ -51,7 +53,7 @@ describe('DashNavTimeControls', () => {
     const container = render(
       <DashNavTimeControls dashboard={dashboardModel} onChangeTimeZone={jest.fn()} key="time-controls" />
     );
-    expect(container.queryByLabelText(/RefreshPicker interval button/i)).not.toBeInTheDocument();
+    expect(container.queryByLabelText(/Choose refresh time interval/i)).not.toBeInTheDocument();
   });
 
   it('should render RefreshPicker run button in panel edit', () => {
@@ -61,6 +63,6 @@ describe('DashNavTimeControls', () => {
     const container = render(
       <DashNavTimeControls dashboard={dashboardModel} onChangeTimeZone={jest.fn()} key="time-controls" />
     );
-    expect(container.queryByLabelText(/RefreshPicker run button/i)).toBeInTheDocument();
+    expect(container.queryByLabelText(/Refresh dashboard/i)).toBeInTheDocument();
   });
 });

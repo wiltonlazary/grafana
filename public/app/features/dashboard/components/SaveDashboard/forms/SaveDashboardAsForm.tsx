@@ -1,9 +1,11 @@
 import React from 'react';
-import { Button, Input, Switch, Form, Field, InputControl, Modal } from '@grafana/ui';
-import { DashboardModel, PanelModel } from 'app/features/dashboard/state';
+
+import { Button, Input, Switch, Form, Field, InputControl, HorizontalGroup } from '@grafana/ui';
 import { FolderPicker } from 'app/core/components/Select/FolderPicker';
+import { DashboardModel, PanelModel } from 'app/features/dashboard/state';
+import { validationSrv } from 'app/features/manage-dashboards/services/ValidationSrv';
+
 import { SaveDashboardFormProps } from '../types';
-import validationSrv from 'app/features/manage-dashboards/services/ValidationSrv';
 
 interface SaveDashboardAsFormDTO {
   title: string;
@@ -17,7 +19,6 @@ const getSaveAsDashboardClone = (dashboard: DashboardModel) => {
   clone.uid = '';
   clone.title += ' Copy';
   clone.editable = true;
-  clone.hideControls = false;
 
   // remove alerts if source dashboard is already persisted
   // do not want to create alert dupes
@@ -34,14 +35,19 @@ const getSaveAsDashboardClone = (dashboard: DashboardModel) => {
   return clone;
 };
 
-export const SaveDashboardAsForm: React.FC<SaveDashboardFormProps & { isNew?: boolean }> = ({
+export interface SaveDashboardAsFormProps extends SaveDashboardFormProps {
+  isNew?: boolean;
+}
+
+export const SaveDashboardAsForm: React.FC<SaveDashboardAsFormProps> = ({
   dashboard,
+  isNew,
   onSubmit,
   onCancel,
   onSuccess,
 }) => {
   const defaultValues: SaveDashboardAsFormDTO = {
-    title: `${dashboard.title} Copy`,
+    title: isNew ? dashboard.title : `${dashboard.title} Copy`,
     $folder: {
       id: dashboard.meta.folderId,
       title: dashboard.meta.folderTitle,
@@ -57,7 +63,7 @@ export const SaveDashboardAsForm: React.FC<SaveDashboardFormProps & { isNew?: bo
       await validationSrv.validateNewDashboardName(getFormValues().$folder.id, dashboardName);
       return true;
     } catch (e) {
-      return e.message;
+      return e instanceof Error ? e.message : 'Dashboard name is invalid';
     }
   };
 
@@ -114,17 +120,19 @@ export const SaveDashboardAsForm: React.FC<SaveDashboardFormProps & { isNew?: bo
               name="$folder"
             />
           </Field>
-          <Field label="Copy tags">
-            <Switch {...register('copyTags')} />
-          </Field>
-          <Modal.ButtonRow>
+          {!isNew && (
+            <Field label="Copy tags">
+              <Switch {...register('copyTags')} />
+            </Field>
+          )}
+          <HorizontalGroup>
             <Button type="button" variant="secondary" onClick={onCancel} fill="outline">
               Cancel
             </Button>
             <Button type="submit" aria-label="Save dashboard button">
               Save
             </Button>
-          </Modal.ButtonRow>
+          </HorizontalGroup>
         </>
       )}
     </Form>

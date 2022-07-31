@@ -1,20 +1,24 @@
-import uPlot, { Cursor, Band, Hooks, Select, AlignedData, Padding } from 'uplot';
 import { merge } from 'lodash';
+import uPlot, { Cursor, Band, Hooks, Select, AlignedData, Padding, Series } from 'uplot';
+
 import {
   DataFrame,
   DefaultTimeZone,
   EventBus,
+  Field,
   getTimeZoneInfo,
   GrafanaTheme2,
   TimeRange,
   TimeZone,
 } from '@grafana/data';
-import { PlotConfig, PlotTooltipInterpolator } from '../types';
+import { AxisPlacement } from '@grafana/schema';
+
+import { FacetedData, PlotConfig, PlotTooltipInterpolator } from '../types';
+import { getStackingBands, pluginLog, StackingGroup } from '../utils';
+
+import { AxisProps, UPlotAxisBuilder } from './UPlotAxisBuilder';
 import { ScaleProps, UPlotScaleBuilder } from './UPlotScaleBuilder';
 import { SeriesProps, UPlotSeriesBuilder } from './UPlotSeriesBuilder';
-import { AxisProps, UPlotAxisBuilder } from './UPlotAxisBuilder';
-import { AxisPlacement } from '@grafana/schema';
-import { pluginLog } from '../utils';
 import { getThresholdsDrawHook, UPlotThresholdOptions } from './UPlotThresholds';
 
 const cursorDefaults: Cursor = {
@@ -31,21 +35,23 @@ const cursorDefaults: Cursor = {
   },
 };
 
-type PrepData = (frame: DataFrame) => AlignedData;
+type PrepData = (frames: DataFrame[]) => AlignedData | FacetedData;
+type PreDataStacked = (frames: DataFrame[], stackingGroups: StackingGroup[]) => AlignedData | FacetedData;
 
 export class UPlotConfigBuilder {
   private series: UPlotSeriesBuilder[] = [];
   private axes: Record<string, UPlotAxisBuilder> = {};
   private scales: UPlotScaleBuilder[] = [];
   private bands: Band[] = [];
+  private stackingGroups: StackingGroup[] = [];
   private cursor: Cursor | undefined;
-  private isStacking = false;
   private select: uPlot.Select | undefined;
   private hasLeftAxis = false;
   private hooks: Hooks.Arrays = {};
   private tz: string | undefined = undefined;
   private sync = false;
-  private frame: DataFrame | undefined = undefined;
+  private mode: uPlot.Mode = 1;
+  private frames: DataFrame[] | undefined = undefined;
   // to prevent more than one threshold per scale
   private thresholds: Record<string, UPlotThresholdOptions> = {};
   // Custom handler for closest datapoint and series lookup
@@ -81,8 +87,14 @@ export class UPlotConfigBuilder {
   addAxis(props: AxisProps) {
     props.placement = props.placement ?? AxisPlacement.Auto;
     props.grid = props.grid ?? {};
-    if (this.axes[props.scaleKey]) {
-      this.axes[props.scaleKey].merge(props);
+    let scaleKey = props.scaleKey;
+
+    if (scaleKey === 'x') {
+      scaleKey += props.timeZone ?? '';
+    }
+
+    if (this.axes[scaleKey]) {
+      this.axes[scaleKey].merge(props);
       return;
     }
 
@@ -100,7 +112,7 @@ export class UPlotConfigBuilder {
       props.size = 0;
     }
 
-    this.axes[props.scaleKey] = new UPlotAxisBuilder(props);
+    this.axes[scaleKey] = new UPlotAxisBuilder(props);
   }
 
   getAxisPlacement(scaleKey: string): AxisPlacement {
@@ -112,12 +124,12 @@ export class UPlotConfigBuilder {
     this.cursor = merge({}, this.cursor, cursor);
   }
 
-  setSelect(select: Select) {
-    this.select = select;
+  setMode(mode: uPlot.Mode) {
+    this.mode = mode;
   }
 
-  setStacking(enabled = true) {
-    this.isStacking = enabled;
+  setSelect(select: Select) {
+    this.select = select;
   }
 
   addSeries(props: SeriesProps) {
@@ -142,6 +154,14 @@ export class UPlotConfigBuilder {
     this.bands.push(band);
   }
 
+  setStackingGroups(groups: StackingGroup[]) {
+    this.stackingGroups = groups;
+  }
+
+  getStackingGroups() {
+    return this.stackingGroups;
+  }
+
   setTooltipInterpolator(interpolator: PlotTooltipInterpolator) {
     this.tooltipInterpolator = interpolator;
   }
@@ -150,10 +170,10 @@ export class UPlotConfigBuilder {
     return this.tooltipInterpolator;
   }
 
-  setPrepData(prepData: PrepData) {
-    this.prepData = (frame) => {
-      this.frame = frame;
-      return prepData(frame);
+  setPrepData(prepData: PreDataStacked) {
+    this.prepData = (frames) => {
+      this.frames = frames;
+      return prepData(frames, this.getStackingGroups());
     };
   }
 
@@ -171,10 +191,13 @@ export class UPlotConfigBuilder {
 
   getConfig() {
     const config: PlotConfig = {
+      mode: this.mode,
       series: [
-        {
-          value: () => '',
-        },
+        this.mode === 2
+          ? (null as unknown as Series)
+          : {
+              value: () => '',
+            },
       ],
     };
     config.axes = this.ensureNonOverlappingAxes(Object.values(this.axes)).map((a) => a.getConfig());
@@ -187,47 +210,46 @@ export class UPlotConfigBuilder {
 
     config.select = this.select;
 
-    const pointColorFn = (alphaHex = '') => (u: uPlot, seriesIdx: number) => {
-      /*@ts-ignore*/
-      let s = u.series[seriesIdx].points._stroke;
+    const pointColorFn =
+      (alphaHex = '') =>
+      (u: uPlot, seriesIdx: number) => {
+        /*@ts-ignore*/
+        let s = u.series[seriesIdx].points._stroke;
 
-      // interpolate for gradients/thresholds
-      if (typeof s !== 'string') {
-        let field = this.frame!.fields[seriesIdx];
-        s = field.display!(field.values.get(u.cursor.idxs![seriesIdx]!)).color!;
-      }
+        // interpolate for gradients/thresholds
+        if (typeof s !== 'string') {
+          let field = this.frames![0].fields[seriesIdx];
+          s = field.display!(field.values.get(u.cursor.idxs![seriesIdx]!)).color!;
+        }
 
-      return s + alphaHex;
-    };
+        return s + alphaHex;
+      };
 
-    config.cursor = merge({}, cursorDefaults, this.cursor, {
-      points: {
-        stroke: pointColorFn('80'),
-        fill: pointColorFn(),
+    config.cursor = merge(
+      {},
+      cursorDefaults,
+      {
+        points: {
+          stroke: pointColorFn('80'),
+          fill: pointColorFn(),
+        },
       },
-    });
+      this.cursor
+    );
 
     config.tzDate = this.tzDate;
     config.padding = this.padding;
 
-    if (this.isStacking) {
-      // Let uPlot handle bands and fills
-      config.bands = this.bands;
-    } else {
-      // When fillBelowTo option enabled, handle series bands fill manually
-      if (this.bands?.length) {
-        config.bands = this.bands;
-        const keepFill = new Set<number>();
-        for (const b of config.bands) {
-          keepFill.add(b.series[0]);
-        }
+    if (this.stackingGroups.length) {
+      this.stackingGroups.forEach((group) => {
+        getStackingBands(group).forEach((band) => {
+          this.addBand(band);
+        });
+      });
+    }
 
-        for (let i = 1; i < config.series.length; i++) {
-          if (!keepFill.has(i)) {
-            config.series[i].fill = undefined;
-          }
-        }
-      }
+    if (this.bands.length) {
+      config.bands = this.bands;
     }
 
     return config;
@@ -259,14 +281,23 @@ export class UPlotConfigBuilder {
   }
 }
 
+export type Renderers = Array<{
+  fieldMap: Record<string, string>;
+  indicesOnly: string[];
+  init: (config: UPlotConfigBuilder, fieldIndices: Record<string, number>) => void;
+}>;
+
 /** @alpha */
 type UPlotConfigPrepOpts<T extends Record<string, any> = {}> = {
   frame: DataFrame;
   theme: GrafanaTheme2;
-  timeZone: TimeZone;
+  timeZones: TimeZone[];
   getTimeRange: () => TimeRange;
   eventBus: EventBus;
   allFrames: DataFrame[];
+  renderers?: Renderers;
+  tweakScale?: (opts: ScaleProps, forField: Field) => ScaleProps;
+  tweakAxis?: (opts: AxisProps, forField: Field) => AxisProps;
 } & T;
 
 /** @alpha */

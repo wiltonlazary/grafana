@@ -1,4 +1,8 @@
 import { css, cx } from '@emotion/css';
+import { identity } from 'lodash';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { usePrevious } from 'react-use';
+
 import {
   AbsoluteTimeRange,
   applyFieldOverrides,
@@ -16,7 +20,7 @@ import {
   TimeZone,
 } from '@grafana/data';
 import { PanelRenderer } from '@grafana/runtime';
-import { GraphDrawStyle, LegendDisplayMode, TooltipDisplayMode } from '@grafana/schema';
+import { GraphDrawStyle, LegendDisplayMode, TooltipDisplayMode, SortOrder } from '@grafana/schema';
 import {
   Icon,
   PanelContext,
@@ -28,10 +32,11 @@ import {
 import appEvents from 'app/core/app_events';
 import { defaultGraphConfig, getGraphFieldConfig } from 'app/plugins/panel/timeseries/config';
 import { TimeSeriesOptions } from 'app/plugins/panel/timeseries/types';
-import { identity } from 'lodash';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { usePrevious } from 'react-use';
+
+import { ExploreGraphStyle } from '../../types';
 import { seriesVisibilityConfigFactory } from '../dashboard/dashgrid/SeriesVisibilityConfigFactory';
+
+import { applyGraphStyle } from './exploreGraphStyleUtils';
 
 const MAX_NUMBER_OF_TIME_SERIES = 20;
 
@@ -47,6 +52,7 @@ interface Props {
   tooltipDisplayMode?: TooltipDisplayMode;
   splitOpenFn?: SplitOpen;
   onChangeTime: (timeRange: AbsoluteTimeRange) => void;
+  graphStyle: ExploreGraphStyle;
 }
 
 export function ExploreGraph({
@@ -60,6 +66,7 @@ export function ExploreGraph({
   annotations,
   onHiddenSeriesChanged,
   splitOpenFn,
+  graphStyle,
   tooltipDisplayMode = TooltipDisplayMode.Single,
 }: Props) {
   const theme = useTheme2();
@@ -68,12 +75,8 @@ export function ExploreGraph({
 
   const previousData = usePrevious(data);
   const structureChangesRef = useRef(0);
-
-  if (data && previousData && !compareArrayValues(previousData, data, compareDataFrameStructures)) {
-    structureChangesRef.current++;
-  }
-
   const structureRev = baseStructureRev + structureChangesRef.current;
+  const prevStructureRev = usePrevious(structureRev);
 
   const [fieldConfig, setFieldConfig] = useState<FieldConfigSource>({
     defaults: {
@@ -89,6 +92,14 @@ export function ExploreGraph({
     overrides: [],
   });
 
+  if (data && previousData && !compareArrayValues(previousData, data, compareDataFrameStructures)) {
+    structureChangesRef.current++;
+
+    if (prevStructureRev === structureRev) {
+      setFieldConfig({ ...fieldConfig, overrides: [] });
+    }
+  }
+
   const style = useStyles2(getStyles);
   const timeRange = {
     from: dateTime(absoluteRange.from),
@@ -101,15 +112,16 @@ export function ExploreGraph({
 
   const dataWithConfig = useMemo(() => {
     const registry = createFieldConfigRegistry(getGraphFieldConfig(defaultGraphConfig), 'Explore');
+    const styledFieldConfig = applyGraphStyle(fieldConfig, graphStyle);
     return applyFieldOverrides({
-      fieldConfig,
+      fieldConfig: styledFieldConfig,
       data,
       timeZone,
       replaceVariables: (value) => value, // We don't need proper replace here as it is only used in getLinks and we use getFieldLinks
       theme,
       fieldConfigRegistry: registry,
     });
-  }, [fieldConfig, data, timeZone, theme]);
+  }, [fieldConfig, graphStyle, data, timeZone, theme]);
 
   useEffect(() => {
     if (onHiddenSeriesChanged) {
@@ -157,10 +169,16 @@ export function ExploreGraph({
         width={width}
         height={height}
         onChangeTimeRange={onChangeTime}
+        timeZone={timeZone}
         options={
           {
-            tooltip: { mode: tooltipDisplayMode },
-            legend: { displayMode: LegendDisplayMode.List, placement: 'bottom', calcs: [] },
+            tooltip: { mode: tooltipDisplayMode, sort: SortOrder.None },
+            legend: {
+              displayMode: LegendDisplayMode.List,
+              showLegend: true,
+              placement: 'bottom',
+              calcs: [],
+            },
           } as TimeSeriesOptions
         }
       />

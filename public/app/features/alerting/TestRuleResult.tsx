@@ -1,10 +1,9 @@
 import React, { PureComponent } from 'react';
-import { LoadingPlaceholder, JSONFormatter, Icon, HorizontalGroup } from '@grafana/ui';
-import appEvents from 'app/core/app_events';
-import { CopyToClipboard } from 'app/core/components/CopyToClipboard/CopyToClipboard';
-import { DashboardModel, PanelModel } from '../dashboard/state';
+
 import { getBackendSrv } from '@grafana/runtime';
-import { AppEvents } from '@grafana/data';
+import { LoadingPlaceholder, JSONFormatter, Icon, HorizontalGroup, ClipboardButton } from '@grafana/ui';
+
+import { DashboardModel, PanelModel } from '../dashboard/state';
 
 export interface Props {
   dashboard: DashboardModel;
@@ -39,7 +38,7 @@ export class TestRuleResult extends PureComponent<Props, State> {
 
     // now replace panel to get current edits
     model.panels = model.panels.map((dashPanel) => {
-      return dashPanel.id === panel.editSourceId ? panel.getSaveModel() : dashPanel;
+      return dashPanel.id === panel.id ? panel.getSaveModel() : dashPanel;
     });
 
     const payload = { dashboard: model, panelId: panel.id };
@@ -55,10 +54,6 @@ export class TestRuleResult extends PureComponent<Props, State> {
 
   getTextForClipboard = () => {
     return JSON.stringify(this.formattedJson, null, 2);
-  };
-
-  onClipboardSuccess = () => {
-    appEvents.emit(AppEvents.alertSuccess, ['Content copied to clipboard']);
   };
 
   onToggleExpand = () => {
@@ -107,9 +102,9 @@ export class TestRuleResult extends PureComponent<Props, State> {
         <div className="pull-right">
           <HorizontalGroup spacing="md">
             <div onClick={this.onToggleExpand}>{this.renderExpandCollapse()}</div>
-            <CopyToClipboard elType="div" text={this.getTextForClipboard} onSuccess={this.onClipboardSuccess}>
-              <Icon name="copy" /> Copy to Clipboard
-            </CopyToClipboard>
+            <ClipboardButton getText={this.getTextForClipboard} icon="copy">
+              Copy to Clipboard
+            </ClipboardButton>
           </HorizontalGroup>
         </div>
 

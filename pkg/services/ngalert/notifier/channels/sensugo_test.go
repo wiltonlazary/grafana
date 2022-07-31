@@ -7,22 +7,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/grafana/pkg/components/simplejson"
+	"github.com/grafana/grafana/pkg/services/secrets/fakes"
+	secretsManager "github.com/grafana/grafana/pkg/services/secrets/manager"
+
 	"github.com/prometheus/alertmanager/notify"
 	"github.com/prometheus/alertmanager/types"
 	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
-
-	"github.com/grafana/grafana/pkg/bus"
-	"github.com/grafana/grafana/pkg/components/simplejson"
-	"github.com/grafana/grafana/pkg/models"
 )
 
 func TestSensuGoNotifier(t *testing.T) {
+	constNow := time.Now()
+	defer mockTimeNow(constNow)()
+
 	tmpl := templateForTests(t)
 
 	externalURL, err := url.Parse("http://localhost")
 	require.NoError(t, err)
 	tmpl.ExternalURL = externalURL
+
+	images := newFakeImageStore(2)
 
 	cases := []struct {
 		name         string
@@ -39,7 +44,7 @@ func TestSensuGoNotifier(t *testing.T) {
 				{
 					Alert: model.Alert{
 						Labels:      model.LabelSet{"__alert_rule_uid__": "rule uid", "alertname": "alert1", "lbl1": "val1"},
-						Annotations: model.LabelSet{"ann1": "annv1", "__dashboardUid__": "abcd", "__panelId__": "efgh"},
+						Annotations: model.LabelSet{"ann1": "annv1", "__dashboardUid__": "abcd", "__panelId__": "efgh", "__alertImageToken__": "test-image-1"},
 					},
 				},
 			},
@@ -54,11 +59,12 @@ func TestSensuGoNotifier(t *testing.T) {
 					"metadata": map[string]interface{}{
 						"name": "default",
 						"labels": map[string]string{
-							"ruleURL": "http://localhost/alerting/list",
+							"imageURL": "https://www.example.com/test-image-1.jpg",
+							"ruleURL":  "http://localhost/alerting/list",
 						},
 					},
-					"output":   "**Firing**\n\nLabels:\n - alertname = alert1\n - lbl1 = val1\nAnnotations:\n - ann1 = annv1\nSilence: http://localhost/alerting/silence/new?alertmanager=grafana&matchers=alertname%3Dalert1%2Clbl1%3Dval1\nDashboard: http://localhost/d/abcd\nPanel: http://localhost/d/abcd?viewPanel=efgh\n",
-					"issued":   time.Now().Unix(),
+					"output":   "**Firing**\n\nValue: [no value]\nLabels:\n - alertname = alert1\n - lbl1 = val1\nAnnotations:\n - ann1 = annv1\nSilence: http://localhost/alerting/silence/new?alertmanager=grafana&matcher=alertname%3Dalert1&matcher=lbl1%3Dval1\nDashboard: http://localhost/d/abcd\nPanel: http://localhost/d/abcd?viewPanel=efgh\n",
+					"issued":   timeNow().Unix(),
 					"interval": 86400,
 					"status":   2,
 					"handlers": nil,
@@ -81,12 +87,12 @@ func TestSensuGoNotifier(t *testing.T) {
 				{
 					Alert: model.Alert{
 						Labels:      model.LabelSet{"__alert_rule_uid__": "rule uid", "alertname": "alert1", "lbl1": "val1"},
-						Annotations: model.LabelSet{"ann1": "annv1"},
+						Annotations: model.LabelSet{"ann1": "annv1", "__alertImageToken__": "test-image-1"},
 					},
 				}, {
 					Alert: model.Alert{
 						Labels:      model.LabelSet{"alertname": "alert1", "lbl1": "val2"},
-						Annotations: model.LabelSet{"ann1": "annv2"},
+						Annotations: model.LabelSet{"ann1": "annv2", "__alertImageToken__": "test-image-2"},
 					},
 				},
 			},
@@ -101,11 +107,12 @@ func TestSensuGoNotifier(t *testing.T) {
 					"metadata": map[string]interface{}{
 						"name": "grafana_rule_0",
 						"labels": map[string]string{
-							"ruleURL": "http://localhost/alerting/list",
+							"imageURL": "https://www.example.com/test-image-1.jpg",
+							"ruleURL":  "http://localhost/alerting/list",
 						},
 					},
 					"output":   "2 alerts are firing, 0 are resolved",
-					"issued":   time.Now().Unix(),
+					"issued":   timeNow().Unix(),
 					"interval": 86400,
 					"status":   2,
 					"handlers": []string{"myhandler"},
@@ -118,13 +125,13 @@ func TestSensuGoNotifier(t *testing.T) {
 			settings: `{
 				"apikey": "<apikey>"
 			}`,
-			expInitError: `failed to validate receiver "Sensu Go" of type "sensugo": could not find URL property in settings`,
+			expInitError: `could not find URL property in settings`,
 		}, {
 			name: "Error in initing: missing API key",
 			settings: `{
 				"url": "http://sensu-api.local:8080"
 			}`,
-			expInitError: `failed to validate receiver "Sensu Go" of type "sensugo": could not find the API key property in settings`,
+			expInitError: `could not find the API key property in settings`,
 		},
 	}
 
@@ -132,14 +139,19 @@ func TestSensuGoNotifier(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			settingsJSON, err := simplejson.NewJson([]byte(c.settings))
 			require.NoError(t, err)
+			secureSettings := make(map[string][]byte)
 
 			m := &NotificationChannelConfig{
-				Name:     "Sensu Go",
-				Type:     "sensugo",
-				Settings: settingsJSON,
+				Name:           "Sensu Go",
+				Type:           "sensugo",
+				Settings:       settingsJSON,
+				SecureSettings: secureSettings,
 			}
 
-			sn, err := NewSensuGoNotifier(m, tmpl)
+			webhookSender := mockNotificationService()
+			secretsService := secretsManager.SetupTestService(t, fakes.NewFakeSecretsStore())
+			decryptFn := secretsService.GetDecryptedValue
+			cfg, err := NewSensuGoConfig(m, decryptFn)
 			if c.expInitError != "" {
 				require.Error(t, err)
 				require.Equal(t, c.expInitError, err.Error())
@@ -147,14 +159,9 @@ func TestSensuGoNotifier(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			body := ""
-			bus.AddHandlerCtx("test", func(ctx context.Context, webhook *models.SendWebhookSync) error {
-				body = webhook.Body
-				return nil
-			})
-
 			ctx := notify.WithGroupKey(context.Background(), "alertname")
 			ctx = notify.WithGroupLabels(ctx, model.LabelSet{"alertname": ""})
+			sn := NewSensuGoNotifier(cfg, images, webhookSender, tmpl)
 			ok, err := sn.Notify(ctx, c.alerts...)
 			if c.expMsgError != nil {
 				require.False(t, ok)
@@ -168,7 +175,7 @@ func TestSensuGoNotifier(t *testing.T) {
 			expBody, err := json.Marshal(c.expMsg)
 			require.NoError(t, err)
 
-			require.JSONEq(t, string(expBody), body)
+			require.JSONEq(t, string(expBody), webhookSender.Webhook.Body)
 		})
 	}
 }

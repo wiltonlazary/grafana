@@ -1,12 +1,16 @@
 import { Field, FieldType } from '@grafana/data';
+
 import { ComponentSize } from './size';
-export type IconType = 'mono' | 'default';
+
+export type IconType = 'mono' | 'default' | 'solid';
 export type IconSize = ComponentSize | 'xl' | 'xxl' | 'xxxl';
 
 export const getAvailableIcons = () =>
   [
+    'anchor',
     'angle-double-down',
     'angle-double-right',
+    'angle-double-up',
     'angle-down',
     'angle-left',
     'angle-right',
@@ -20,17 +24,23 @@ export const getAvailableIcons = () =>
     'arrow-right',
     'arrow-up',
     'arrows-h',
+    'arrows-v',
+    'backward',
     'bars',
     'bell',
     'bell-slash',
     'bolt',
     'book',
+    'bookmark',
     'book-open',
     'brackets-curly',
+    'building',
     'bug',
+    'building',
     'calculator-alt',
     'calendar-alt',
     'camera',
+    'capture',
     'channel-add',
     'chart-line',
     'check',
@@ -45,11 +55,14 @@ export const getAvailableIcons = () =>
     'cog',
     'columns',
     'comment-alt',
+    'comment-alt-message',
+    'comment-alt-share',
     'comments-alt',
     'compass',
     'copy',
     'credit-card',
     'cube',
+    'dashboard',
     'database',
     'document-info',
     'download-alt',
@@ -59,9 +72,11 @@ export const getAvailableIcons = () =>
     'envelope',
     'exchange-alt',
     'exclamation-triangle',
+    'exclamation-circle',
     'external-link-alt',
     'eye',
     'eye-slash',
+    'ellipsis-h',
     'fa fa-spinner',
     'favorite',
     'file-alt',
@@ -75,6 +90,9 @@ export const getAvailableIcons = () =>
     'folder-plus',
     'folder-upload',
     'forward',
+    'gf-bar-alignment-after',
+    'gf-bar-alignment-before',
+    'gf-bar-alignment-center',
     'gf-grid',
     'gf-interpolation-linear',
     'gf-interpolation-smooth',
@@ -89,9 +107,14 @@ export const getAvailableIcons = () =>
     'heart',
     'heart-break',
     'history',
+    'home',
     'home-alt',
+    'horizontal-align-center',
+    'horizontal-align-left',
+    'horizontal-align-right',
     'hourglass',
     'import',
+    'info',
     'info-circle',
     'key-skeleton-alt',
     'keyboard',
@@ -102,6 +125,7 @@ export const getAvailableIcons = () =>
     'list-ui-alt',
     'list-ul',
     'lock',
+    'map-marker',
     'message',
     'minus',
     'minus-circle',
@@ -118,7 +142,10 @@ export const getAvailableIcons = () =>
     'plus-circle',
     'plus-square',
     'power',
+    'presentation-play',
+    'process',
     'question-circle',
+    'record-audio',
     'repeat',
     'rocket',
     'save',
@@ -128,19 +155,21 @@ export const getAvailableIcons = () =>
     'share-alt',
     'shield',
     'shield-exclamation',
-    'sign-in-alt',
     'signal',
     'signin',
     'signout',
+    'sitemap',
     'slack',
     'sliders-v-alt',
     'sort-amount-down',
+    'sort-amount-up',
     'square-shape',
     'star',
     'step-backward',
     'sync',
     'table',
     'tag-alt',
+    'text-fields',
     'times',
     'toggle-on',
     'trash-alt',
@@ -148,7 +177,11 @@ export const getAvailableIcons = () =>
     'upload',
     'user',
     'users-alt',
+    'vertical-align-bottom',
+    'vertical-align-center',
+    'vertical-align-top',
     'wrap-text',
+    'rss',
     'x',
   ] as const;
 
@@ -170,6 +203,8 @@ export function getFieldTypeIcon(field?: Field): IconName {
         return 'toggle-on';
       case FieldType.trace:
         return 'info-circle';
+      case FieldType.geo:
+        return 'map-marker';
       case FieldType.other:
         return 'brackets-curly';
     }

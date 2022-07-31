@@ -1,9 +1,11 @@
 import { AnyAction, createAction } from '@reduxjs/toolkit';
-import { DataSourcePluginMeta, DataSourceSettings, LayoutMode, LayoutModes } from '@grafana/data';
 
+import { DataSourcePluginMeta, DataSourceSettings, LayoutMode, LayoutModes } from '@grafana/data';
 import { DataSourcesState, DataSourceSettingsState, TestingStatus } from 'app/types';
+
+import { GenericDataSourcePlugin } from '../types';
+
 import { DataSourceTypesLoadedPayload } from './actions';
-import { GenericDataSourcePlugin } from '../settings/PluginSettings';
 
 export const initialState: DataSourcesState = {
   dataSources: [],
@@ -97,6 +99,7 @@ export const dataSourcesReducer = (state: DataSourcesState = initialState, actio
 export const initialDataSourceSettingsState: DataSourceSettingsState = {
   testingStatus: {},
   loadError: null,
+  loading: true,
   plugin: null,
 };
 
@@ -117,11 +120,11 @@ export const dataSourceSettingsReducer = (
   action: AnyAction
 ): DataSourceSettingsState => {
   if (initDataSourceSettingsSucceeded.match(action)) {
-    return { ...state, plugin: action.payload, loadError: null };
+    return { ...state, plugin: action.payload, loadError: null, loading: false };
   }
 
   if (initDataSourceSettingsFailed.match(action)) {
-    return { ...state, plugin: null, loadError: action.payload.message };
+    return { ...state, plugin: null, loadError: action.payload.message, loading: false };
   }
 
   if (testDataSourceStarting.match(action)) {

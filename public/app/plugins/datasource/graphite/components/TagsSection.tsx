@@ -1,16 +1,19 @@
-import React, { useCallback, useMemo } from 'react';
-import { GraphiteSegment } from '../types';
-import { GraphiteTag } from '../graphite_query';
-import { GraphiteQueryEditorState } from '../state/store';
-import { getTagsAsSegmentsSelectables } from '../state/providers';
-import { Button, SegmentAsync, useStyles2 } from '@grafana/ui';
-import { actions } from '../state/actions';
-import { GrafanaTheme2 } from '@grafana/data';
 import { css } from '@emotion/css';
-import { TagEditor } from './TagEditor';
 import { debounce } from 'lodash';
+import React, { useCallback, useMemo } from 'react';
+
+import { GrafanaTheme2 } from '@grafana/data';
+import { Button, SegmentAsync, useStyles2 } from '@grafana/ui';
+
+import { GraphiteTag } from '../graphite_query';
+import { actions } from '../state/actions';
 import { useDispatch } from '../state/context';
+import { getTagsAsSegmentsSelectables } from '../state/providers';
+import { GraphiteQueryEditorState } from '../state/store';
+import { GraphiteSegment } from '../types';
+
 import { PlayButton } from './PlayButton';
+import { TagEditor } from './TagEditor';
 
 type Props = {
   tags: GraphiteTag[];
@@ -35,9 +38,10 @@ export function TagsSection({ tags, state }: Props) {
     },
     [state]
   );
-  const debouncedGetTagsAsSegments = useMemo(() => debounce(getTagsAsSegmentsOptions, 200, { leading: true }), [
-    getTagsAsSegmentsOptions,
-  ]);
+  const debouncedGetTagsAsSegments = useMemo(
+    () => debounce(getTagsAsSegmentsOptions, 200, { leading: true }),
+    [getTagsAsSegmentsOptions]
+  );
 
   return (
     <>
@@ -52,7 +56,7 @@ export function TagsSection({ tags, state }: Props) {
           }}
           loadOptions={debouncedGetTagsAsSegments}
           reloadOptionsOnChange={true}
-          Component={<Button icon="plus" variant="secondary" className={styles.button} />}
+          Component={<Button icon="plus" variant="secondary" className={styles.button} aria-label="Add new tag" />}
         />
       )}
       {state.paused && <PlayButton />}

@@ -1,6 +1,7 @@
-import path from 'path';
-import fs from 'fs';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+
 import { ManifestInfo } from './types';
 
 const MANIFEST_FILE = 'MANIFEST.txt';
@@ -76,7 +77,7 @@ export async function signManifest(manifest: ManifestInfo): Promise<string> {
 
     return info.data;
   } catch (err: any) {
-    if ((err.response && err.response.data) || err.response.data.message) {
+    if (err.response?.data?.message) {
       throw new Error('Error signing manifest: ' + err.response.data.message);
     }
 

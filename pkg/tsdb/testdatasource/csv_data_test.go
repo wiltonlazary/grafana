@@ -17,7 +17,7 @@ func TestCSVFileScenario(t *testing.T) {
 	cfg.DataPath = t.TempDir()
 	cfg.StaticRootPath = "../../../public"
 
-	p := &TestDataPlugin{
+	s := &Service{
 		cfg: cfg,
 	}
 
@@ -42,15 +42,12 @@ func TestCSVFileScenario(t *testing.T) {
 				dr := &backend.DataResponse{
 					Frames: data.Frames{frame},
 				}
-				err = experimental.CheckGoldenDataResponse(
-					filepath.Join("testdata", name+".golden.txt"), dr, true,
-				)
-				require.NoError(t, err)
+				experimental.CheckGoldenJSONResponse(t, "testdata", name+".golden", dr, true)
 			})
 		}
 
 		t.Run("Should not allow non file name chars", func(t *testing.T) {
-			_, err := p.loadCsvFile("../population_by_state.csv")
+			_, err := s.loadCsvFile("../population_by_state.csv")
 			require.Error(t, err)
 		})
 	})

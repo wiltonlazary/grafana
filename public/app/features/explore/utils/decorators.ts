@@ -1,3 +1,7 @@
+import { groupBy } from 'lodash';
+import { Observable, of } from 'rxjs';
+import { map, mergeMap } from 'rxjs/operators';
+
 import {
   AbsoluteTimeRange,
   DataFrame,
@@ -9,10 +13,8 @@ import {
   DataQuery,
 } from '@grafana/data';
 import { config } from '@grafana/runtime';
-import { groupBy } from 'lodash';
-import { Observable, of } from 'rxjs';
-import { map, mergeMap } from 'rxjs/operators';
-import { dataFrameToLogsModel } from '../../../core/logs_model';
+
+import { dataFrameToLogsModel } from '../../../core/logsModel';
 import { refreshIntervalToSortOrder } from '../../../core/utils/explore';
 import { ExplorePanelData } from '../../../types';
 import { preProcessPanelData } from '../../query/state/runRequest';
@@ -130,23 +132,30 @@ export const decorateWithTableResult = (data: ExplorePanelData): Observable<Expl
   );
 };
 
-export const decorateWithLogsResult = (
-  options: { absoluteRange?: AbsoluteTimeRange; refreshInterval?: string; queries?: DataQuery[] } = {}
-) => (data: ExplorePanelData): ExplorePanelData => {
-  if (data.logsFrames.length === 0) {
-    return { ...data, logsResult: null };
-  }
+export const decorateWithLogsResult =
+  (
+    options: {
+      absoluteRange?: AbsoluteTimeRange;
+      refreshInterval?: string;
+      queries?: DataQuery[];
+      fullRangeLogsVolumeAvailable?: boolean;
+    } = {}
+  ) =>
+  (data: ExplorePanelData): ExplorePanelData => {
+    if (data.logsFrames.length === 0) {
+      return { ...data, logsResult: null };
+    }
 
-  const intervalMs = data.request?.intervalMs;
-  const newResults = dataFrameToLogsModel(data.logsFrames, intervalMs, options.absoluteRange, options.queries);
-  const sortOrder = refreshIntervalToSortOrder(options.refreshInterval);
-  const sortedNewResults = sortLogsResult(newResults, sortOrder);
-  const rows = sortedNewResults.rows;
-  const series = sortedNewResults.series;
-  const logsResult = { ...sortedNewResults, rows, series };
+    const intervalMs = data.request?.intervalMs;
+    const newResults = dataFrameToLogsModel(data.logsFrames, intervalMs, options.absoluteRange, options.queries);
+    const sortOrder = refreshIntervalToSortOrder(options.refreshInterval);
+    const sortedNewResults = sortLogsResult(newResults, sortOrder);
+    const rows = sortedNewResults.rows;
+    const series = options.fullRangeLogsVolumeAvailable ? undefined : sortedNewResults.series;
+    const logsResult = { ...sortedNewResults, rows, series };
 
-  return { ...data, logsResult };
-};
+    return { ...data, logsResult };
+  };
 
 // decorateData applies all decorators
 export function decorateData(
@@ -154,13 +163,14 @@ export function decorateData(
   queryResponse: PanelData,
   absoluteRange: AbsoluteTimeRange,
   refreshInterval: string | undefined,
-  queries: DataQuery[] | undefined
+  queries: DataQuery[] | undefined,
+  fullRangeLogsVolumeAvailable: boolean
 ): Observable<ExplorePanelData> {
   return of(data).pipe(
     map((data: PanelData) => preProcessPanelData(data, queryResponse)),
     map(decorateWithFrameTypeMetadata),
     map(decorateWithGraphResult),
-    map(decorateWithLogsResult({ absoluteRange, refreshInterval, queries })),
+    map(decorateWithLogsResult({ absoluteRange, refreshInterval, queries, fullRangeLogsVolumeAvailable })),
     mergeMap(decorateWithTableResult)
   );
 }

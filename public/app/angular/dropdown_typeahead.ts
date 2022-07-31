@@ -1,6 +1,7 @@
-import { each, reduce } from 'lodash';
 import $ from 'jquery';
-import coreModule from '../core/core_module';
+import { each, reduce } from 'lodash';
+
+import coreModule from './core_module';
 
 /** @ngInject */
 export function dropdownTypeahead($compile: any) {

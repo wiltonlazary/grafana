@@ -1,11 +1,13 @@
-import React, { useState, useCallback, ChangeEvent, FunctionComponent } from 'react';
-import SliderComponent from 'rc-slider';
 import { cx } from '@emotion/css';
 import { Global } from '@emotion/react';
+import SliderComponent from 'rc-slider';
+import React, { useState, useCallback, ChangeEvent, FunctionComponent, FocusEvent } from 'react';
+
 import { useTheme2 } from '../../themes/ThemeContext';
+import { Input } from '../Input/Input';
+
 import { getStyles } from './styles';
 import { SliderProps } from './types';
-import { Input } from '../Input/Input';
 
 /**
  * @public
@@ -19,12 +21,15 @@ export const Slider: FunctionComponent<SliderProps> = ({
   reverse,
   step,
   value,
+  ariaLabelForHandle,
+  marks,
+  included,
 }) => {
   const isHorizontal = orientation === 'horizontal';
   const theme = useTheme2();
-  const styles = getStyles(theme, isHorizontal);
+  const styles = getStyles(theme, isHorizontal, Boolean(marks));
   const SliderWithTooltip = SliderComponent;
-  const [sliderValue, setSliderValue] = useState<number>(value || min);
+  const [sliderValue, setSliderValue] = useState<number>(value ?? min);
 
   const onSliderChange = useCallback(
     (v: number) => {
@@ -45,9 +50,6 @@ export const Slider: FunctionComponent<SliderProps> = ({
         v = 0;
       }
 
-      v > max && (v = max);
-      v < min && (v = min);
-
       setSliderValue(v);
 
       if (onChange) {
@@ -58,7 +60,22 @@ export const Slider: FunctionComponent<SliderProps> = ({
         onAfterChange(v);
       }
     },
-    [max, min, onChange, onAfterChange]
+    [onChange, onAfterChange]
+  );
+
+  // Check for min/max on input blur so user is able to enter
+  // custom values that might seem above/below min/max on first keystroke
+  const onSliderInputBlur = useCallback(
+    (e: FocusEvent<HTMLInputElement>) => {
+      const v = +e.target.value;
+
+      if (v > max) {
+        setSliderValue(max);
+      } else if (v < min) {
+        setSliderValue(min);
+      }
+    },
+    [max, min]
   );
 
   const sliderInputClassNames = !isHorizontal ? [styles.sliderInputVertical] : [];
@@ -79,6 +96,9 @@ export const Slider: FunctionComponent<SliderProps> = ({
           onAfterChange={onAfterChange}
           vertical={!isHorizontal}
           reverse={reverse}
+          ariaLabelForHandle={ariaLabelForHandle}
+          marks={marks}
+          included={included}
         />
         {/* Uses text input so that the number spinners are not shown */}
         <Input
@@ -86,6 +106,7 @@ export const Slider: FunctionComponent<SliderProps> = ({
           className={cx(styles.sliderInputField, ...sliderInputFieldClassNames)}
           value={`${sliderValue}`} // to fix the react leading zero issue
           onChange={onSliderInputChange}
+          onBlur={onSliderInputBlur}
           min={min}
           max={max}
         />

@@ -10,13 +10,13 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
-	"github.com/grafana/grafana/pkg/bus"
-	"github.com/grafana/grafana/pkg/models"
-	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/grafana/pkg/services/datasources"
+	datafakes "github.com/grafana/grafana/pkg/services/datasources/fakes"
+	"github.com/grafana/grafana/pkg/setting"
 )
 
-// nolint:staticcheck // plugins.DataPlugin deprecated
 func TestService(t *testing.T) {
 	dsDF := data.NewFrame("test",
 		data.NewField("time", nil, []time.Time{time.Unix(1, 0)}),
@@ -25,20 +25,29 @@ func TestService(t *testing.T) {
 	me := &mockEndpoint{
 		Frames: []*data.Frame{dsDF},
 	}
-	s := Service{DataService: me}
-	bus.AddHandler("test", func(query *models.GetDataSourceQuery) error {
-		query.Result = &models.DataSource{Id: 1, OrgId: 1, Type: "test"}
-		return nil
-	})
+
+	cfg := setting.NewCfg()
+
+	s := Service{
+		cfg:               cfg,
+		dataService:       me,
+		dataSourceService: &datafakes.FakeDataSourceService{},
+	}
 
 	queries := []Query{
 		{
 			RefID: "A",
-			JSON:  json.RawMessage(`{ "datasource": "test", "datasourceId": 1, "orgId": 1, "intervalMs": 1000, "maxDataPoints": 1000 }`),
+			DataSource: &datasources.DataSource{
+				OrgId: 1,
+				Uid:   "test",
+				Type:  "test",
+			},
+			JSON: json.RawMessage(`{ "datasource": { "uid": "1" }, "intervalMs": 1000, "maxDataPoints": 1000 }`),
 		},
 		{
-			RefID: "B",
-			JSON:  json.RawMessage(`{ "datasource": "__expr__", "datasourceId": -100, "type": "math", "expression": "$A * 2" }`),
+			RefID:      "B",
+			DataSource: DataSourceModel(),
+			JSON:       json.RawMessage(`{ "datasource": { "uid": "__expr__", "type": "__expr__"}, "type": "math", "expression": "$A * 2" }`),
 		},
 	}
 
@@ -88,18 +97,10 @@ type mockEndpoint struct {
 	Frames data.Frames
 }
 
-// nolint:staticcheck // plugins.DataQueryResponse deprecated
-func (me *mockEndpoint) DataQuery(ctx context.Context, ds *models.DataSource, query plugins.DataQuery) (plugins.DataResponse, error) {
-	return plugins.DataResponse{
-		Results: map[string]plugins.DataQueryResult{
-			"A": {
-				Dataframes: plugins.NewDecodedDataFrames(me.Frames),
-			},
-		},
-	}, nil
-}
-
-// nolint:staticcheck // plugins.DataQueryResponse deprecated
-func (me *mockEndpoint) HandleRequest(ctx context.Context, ds *models.DataSource, query plugins.DataQuery) (plugins.DataResponse, error) {
-	return me.DataQuery(ctx, ds, query)
+func (me *mockEndpoint) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	resp := backend.NewQueryDataResponse()
+	resp.Responses["A"] = backend.DataResponse{
+		Frames: me.Frames,
+	}
+	return resp, nil
 }

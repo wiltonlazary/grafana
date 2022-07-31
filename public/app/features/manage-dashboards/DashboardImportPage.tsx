@@ -1,45 +1,76 @@
-import React, { FormEvent, PureComponent } from 'react';
-import { MapDispatchToProps, MapStateToProps } from 'react-redux';
 import { css } from '@emotion/css';
-import { AppEvents, GrafanaTheme2, NavModel } from '@grafana/data';
+import React, { FormEvent, PureComponent } from 'react';
+import { connect, ConnectedProps } from 'react-redux';
+
+import { AppEvents, GrafanaTheme2, LoadingState } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
+import { reportInteraction } from '@grafana/runtime';
 import {
   Button,
-  stylesFactory,
-  withTheme2,
-  Input,
-  TextArea,
   Field,
-  Form,
-  Legend,
   FileUpload,
+  Form,
+  HorizontalGroup,
+  Input,
+  Spinner,
+  stylesFactory,
+  TextArea,
   Themeable2,
+  VerticalGroup,
+  withTheme2,
 } from '@grafana/ui';
-import Page from 'app/core/components/Page/Page';
-import { connectWithCleanUp } from 'app/core/components/connectWithCleanUp';
-import { ImportDashboardOverview } from './components/ImportDashboardOverview';
-import { validateDashboardJson, validateGcomDashboard } from './utils/validation';
-import { fetchGcomDashboard, importDashboardJson } from './state/actions';
 import appEvents from 'app/core/app_events';
-import { getNavModel } from 'app/core/selectors/navModel';
+import { Page } from 'app/core/components/Page/Page';
+import { GrafanaRouteComponentProps } from 'app/core/navigation/types';
 import { StoreState } from 'app/types';
 
-interface OwnProps extends Themeable2 {}
+import { cleanUpAction } from '../../core/actions/cleanUp';
 
-interface ConnectedProps {
-  navModel: NavModel;
-  isLoaded: boolean;
-}
+import { ImportDashboardOverview } from './components/ImportDashboardOverview';
+import { fetchGcomDashboard, importDashboardJson } from './state/actions';
+import { validateDashboardJson, validateGcomDashboard } from './utils/validation';
 
-interface DispatchProps {
-  fetchGcomDashboard: typeof fetchGcomDashboard;
-  importDashboardJson: typeof importDashboardJson;
-}
+type DashboardImportPageRouteSearchParams = {
+  gcomDashboardId?: string;
+};
 
-type Props = OwnProps & ConnectedProps & DispatchProps;
+type OwnProps = Themeable2 & GrafanaRouteComponentProps<{}, DashboardImportPageRouteSearchParams>;
+
+const IMPORT_STARTED_EVENT_NAME = 'dashboard_import_loaded';
+
+const mapStateToProps = (state: StoreState) => ({
+  loadingState: state.importDashboard.state,
+});
+
+const mapDispatchToProps = {
+  fetchGcomDashboard,
+  importDashboardJson,
+  cleanUpAction,
+};
+
+const connector = connect(mapStateToProps, mapDispatchToProps);
+
+type Props = OwnProps & ConnectedProps<typeof connector>;
 
 class UnthemedDashboardImport extends PureComponent<Props> {
+  constructor(props: Props) {
+    super(props);
+    const { gcomDashboardId } = this.props.queryParams;
+    if (gcomDashboardId) {
+      this.getGcomDashboard({ gcomDashboard: gcomDashboardId });
+      return;
+    }
+  }
+
+  componentWillUnmount() {
+    this.props.cleanUpAction({ stateSelector: (state: StoreState) => state.importDashboard });
+  }
+
   onFileUpload = (event: FormEvent<HTMLInputElement>) => {
+    reportInteraction(IMPORT_STARTED_EVENT_NAME, {
+      import_source: 'json_uploaded',
+    });
+
     const { importDashboardJson } = this.props;
     const file = event.currentTarget.files && event.currentTarget.files.length > 0 && event.currentTarget.files[0];
 
@@ -51,10 +82,12 @@ class UnthemedDashboardImport extends PureComponent<Props> {
           try {
             dashboard = JSON.parse(e.target.result);
           } catch (error) {
-            appEvents.emit(AppEvents.alertError, [
-              'Import failed',
-              'JSON -> JS Serialization failed: ' + error.message,
-            ]);
+            if (error instanceof Error) {
+              appEvents.emit(AppEvents.alertError, [
+                'Import failed',
+                'JSON -> JS Serialization failed: ' + error.message,
+              ]);
+            }
             return;
           }
           importDashboardJson(dashboard);
@@ -66,10 +99,18 @@ class UnthemedDashboardImport extends PureComponent<Props> {
   };
 
   getDashboardFromJson = (formData: { dashboardJson: string }) => {
+    reportInteraction(IMPORT_STARTED_EVENT_NAME, {
+      import_source: 'json_pasted',
+    });
+
     this.props.importDashboardJson(JSON.parse(formData.dashboardJson));
   };
 
   getGcomDashboard = (formData: { gcomDashboard: string }) => {
+    reportInteraction(IMPORT_STARTED_EVENT_NAME, {
+      import_source: 'gcom',
+    });
+
     let dashboardId;
     const match = /(^\d+$)|dashboards\/(\d+)/.exec(formData.gcomDashboard);
     if (match && match[1]) {
@@ -94,11 +135,15 @@ class UnthemedDashboardImport extends PureComponent<Props> {
           </FileUpload>
         </div>
         <div className={styles.option}>
-          <Legend>Import via grafana.com</Legend>
           <Form onSubmit={this.getGcomDashboard} defaultValues={{ gcomDashboard: '' }}>
             {({ register, errors }) => (
-              <Field invalid={!!errors.gcomDashboard} error={errors.gcomDashboard && errors.gcomDashboard.message}>
+              <Field
+                label="Import via grafana.com"
+                invalid={!!errors.gcomDashboard}
+                error={errors.gcomDashboard && errors.gcomDashboard.message}
+              >
                 <Input
+                  id="url-input"
                   placeholder="Grafana.com dashboard URL or ID"
                   type="text"
                   {...register('gcomDashboard', {
@@ -112,17 +157,21 @@ class UnthemedDashboardImport extends PureComponent<Props> {
           </Form>
         </div>
         <div className={styles.option}>
-          <Legend>Import via panel json</Legend>
           <Form onSubmit={this.getDashboardFromJson} defaultValues={{ dashboardJson: '' }}>
             {({ register, errors }) => (
               <>
-                <Field invalid={!!errors.dashboardJson} error={errors.dashboardJson && errors.dashboardJson.message}>
+                <Field
+                  label="Import via panel json"
+                  invalid={!!errors.dashboardJson}
+                  error={errors.dashboardJson && errors.dashboardJson.message}
+                >
                   <TextArea
                     {...register('dashboardJson', {
                       required: 'Need a dashboard JSON model',
                       validate: validateDashboardJson,
                     })}
                     data-testid={selectors.components.DashboardImportPage.textarea}
+                    id="dashboard-json-textarea"
                     rows={10}
                   />
                 </Field>
@@ -138,36 +187,30 @@ class UnthemedDashboardImport extends PureComponent<Props> {
   }
 
   render() {
-    const { isLoaded, navModel } = this.props;
+    const { loadingState } = this.props;
+
     return (
-      <Page navModel={navModel}>
-        <Page.Contents>{isLoaded ? <ImportDashboardOverview /> : this.renderImportForm()}</Page.Contents>
+      <Page navId="dashboards/import">
+        <Page.Contents>
+          {loadingState === LoadingState.Loading && (
+            <VerticalGroup justify="center">
+              <HorizontalGroup justify="center">
+                <Spinner size={32} />
+              </HorizontalGroup>
+            </VerticalGroup>
+          )}
+          {[LoadingState.Error, LoadingState.NotStarted].includes(loadingState) && this.renderImportForm()}
+          {loadingState === LoadingState.Done && <ImportDashboardOverview />}
+        </Page.Contents>
       </Page>
     );
   }
 }
 
 const DashboardImportUnConnected = withTheme2(UnthemedDashboardImport);
-
-const mapStateToProps: MapStateToProps<ConnectedProps, OwnProps, StoreState> = (state: StoreState) => ({
-  navModel: getNavModel(state.navIndex, 'import', undefined, true),
-  isLoaded: state.importDashboard.isLoaded,
-});
-
-const mapDispatchToProps: MapDispatchToProps<DispatchProps, Props> = {
-  fetchGcomDashboard,
-  importDashboardJson,
-};
-
-export const DashboardImportPage = connectWithCleanUp(
-  mapStateToProps,
-  mapDispatchToProps,
-  (state) => state.importDashboard
-)(DashboardImportUnConnected);
-
-export default DashboardImportPage;
-
-DashboardImportPage.displayName = 'DashboardImport';
+const DashboardImport = connector(DashboardImportUnConnected);
+DashboardImport.displayName = 'DashboardImport';
+export default DashboardImport;
 
 const importStyles = stylesFactory((theme: GrafanaTheme2) => {
   return {

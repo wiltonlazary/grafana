@@ -1,21 +1,24 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/grafana/grafana/pkg/services/encryption/ossencryption"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana/pkg/api/dtos"
 	"github.com/grafana/grafana/pkg/api/response"
 	"github.com/grafana/grafana/pkg/api/routing"
-	"github.com/grafana/grafana/pkg/bus"
 	"github.com/grafana/grafana/pkg/components/simplejson"
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/login"
@@ -24,9 +27,11 @@ import (
 	"github.com/grafana/grafana/pkg/services/auth"
 	"github.com/grafana/grafana/pkg/services/hooks"
 	"github.com/grafana/grafana/pkg/services/licensing"
+	"github.com/grafana/grafana/pkg/services/secrets"
+	"github.com/grafana/grafana/pkg/services/secrets/fakes"
+	secretsManager "github.com/grafana/grafana/pkg/services/secrets/manager"
+	"github.com/grafana/grafana/pkg/services/user"
 	"github.com/grafana/grafana/pkg/setting"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func fakeSetIndexViewData(t *testing.T) {
@@ -62,22 +67,6 @@ func getBody(resp *httptest.ResponseRecorder) (string, error) {
 	return string(responseData), nil
 }
 
-type FakeLogger struct {
-	log.Logger
-}
-
-func (fl *FakeLogger) Debug(testMessage string, ctx ...interface{}) {
-}
-
-func (fl *FakeLogger) Info(testMessage string, ctx ...interface{}) {
-}
-
-func (fl *FakeLogger) Warn(testMessage string, ctx ...interface{}) {
-}
-
-func (fl *FakeLogger) Error(testMessage string, ctx ...interface{}) {
-}
-
 type redirectCase struct {
 	desc        string
 	url         string
@@ -105,16 +94,18 @@ func TestLoginErrorCookieAPIEndpoint(t *testing.T) {
 
 	sc := setupScenarioContext(t, "/login")
 	cfg := setting.NewCfg()
+	secretsService := secretsManager.SetupTestService(t, fakes.NewFakeSecretsStore())
 	hs := &HTTPServer{
-		Cfg:               cfg,
-		SettingsProvider:  &setting.OSSImpl{Cfg: cfg},
-		License:           &licensing.OSSLicensingService{},
-		SocialService:     &mockSocialService{},
-		EncryptionService: ossencryption.ProvideService(),
+		Cfg:              cfg,
+		SettingsProvider: &setting.OSSImpl{Cfg: cfg},
+		License:          &licensing.OSSLicensingService{},
+		SocialService:    &mockSocialService{},
+		SecretsService:   secretsService,
 	}
 
-	sc.defaultHandler = routing.Wrap(func(w http.ResponseWriter, c *models.ReqContext) {
+	sc.defaultHandler = routing.Wrap(func(c *models.ReqContext) response.Response {
 		hs.LoginView(c)
+		return response.Empty(http.StatusOK)
 	})
 
 	cfg.LoginCookieName = "grafana_session"
@@ -123,7 +114,7 @@ func TestLoginErrorCookieAPIEndpoint(t *testing.T) {
 	setting.OAuthAutoLogin = true
 
 	oauthError := errors.New("User not a member of one of the required organizations")
-	encryptedError, err := hs.EncryptionService.Encrypt([]byte(oauthError.Error()), setting.SecretKey)
+	encryptedError, err := hs.SecretsService.Encrypt(context.Background(), []byte(oauthError.Error()), secrets.WithoutScope())
 	require.NoError(t, err)
 	expCookiePath := "/"
 	if len(setting.AppSubUrl) > 0 {
@@ -149,7 +140,6 @@ func TestLoginErrorCookieAPIEndpoint(t *testing.T) {
 
 func TestLoginViewRedirect(t *testing.T) {
 	fakeSetIndexViewData(t)
-
 	fakeViewIndex(t)
 	sc := setupScenarioContext(t, "/login")
 	cfg := setting.NewCfg()
@@ -161,12 +151,13 @@ func TestLoginViewRedirect(t *testing.T) {
 	}
 	hs.Cfg.CookieSecure = true
 
-	sc.defaultHandler = routing.Wrap(func(w http.ResponseWriter, c *models.ReqContext) {
+	sc.defaultHandler = routing.Wrap(func(c *models.ReqContext) response.Response {
 		c.IsSignedIn = true
 		c.SignedInUser = &models.SignedInUser{
 			UserId: 10,
 		}
 		hs.LoginView(c)
+		return response.Empty(http.StatusOK)
 	})
 
 	redirectCases := []redirectCase{
@@ -327,7 +318,7 @@ func TestLoginPostRedirect(t *testing.T) {
 	fakeViewIndex(t)
 	sc := setupScenarioContext(t, "/login")
 	hs := &HTTPServer{
-		log:              &FakeLogger{},
+		log:              log.NewNopLogger(),
 		Cfg:              setting.NewCfg(),
 		HooksService:     &hooks.HooksService{},
 		License:          &licensing.OSSLicensingService{},
@@ -335,21 +326,18 @@ func TestLoginPostRedirect(t *testing.T) {
 	}
 	hs.Cfg.CookieSecure = true
 
-	sc.defaultHandler = routing.Wrap(func(w http.ResponseWriter, c *models.ReqContext) response.Response {
-		cmd := dtos.LoginCommand{
-			User:     "admin",
-			Password: "admin",
-		}
-		return hs.LoginPost(c, cmd)
+	sc.defaultHandler = routing.Wrap(func(c *models.ReqContext) response.Response {
+		c.Req.Header.Set("Content-Type", "application/json")
+		c.Req.Body = io.NopCloser(bytes.NewBufferString(`{"user":"admin","password":"admin"}`))
+		return hs.LoginPost(c)
 	})
 
-	bus.AddHandler("grafana-auth", func(query *models.LoginUserQuery) error {
-		query.User = &models.User{
-			Id:    42,
-			Email: "",
-		}
-		return nil
-	})
+	user := &user.User{
+		ID:    42,
+		Email: "",
+	}
+
+	hs.authenticator = &fakeAuthenticator{user, "", nil}
 
 	redirectCases := []redirectCase{
 		{
@@ -436,6 +424,7 @@ func TestLoginPostRedirect(t *testing.T) {
 	for _, c := range redirectCases {
 		hs.Cfg.AppURL = c.appURL
 		hs.Cfg.AppSubURL = c.appSubURL
+
 		t.Run(c.desc, func(t *testing.T) {
 			expCookiePath := "/"
 			if len(hs.Cfg.AppSubURL) > 0 {
@@ -501,8 +490,9 @@ func TestLoginOAuthRedirect(t *testing.T) {
 		SocialService:    mock,
 	}
 
-	sc.defaultHandler = routing.Wrap(func(c *models.ReqContext) {
+	sc.defaultHandler = routing.Wrap(func(c *models.ReqContext) response.Response {
 		hs.LoginView(c)
+		return response.Empty(http.StatusOK)
 	})
 
 	setting.OAuthAutoLogin = true
@@ -526,9 +516,10 @@ func TestLoginInternal(t *testing.T) {
 		log:     log.New("test"),
 	}
 
-	sc.defaultHandler = routing.Wrap(func(c *models.ReqContext) {
+	sc.defaultHandler = routing.Wrap(func(c *models.ReqContext) response.Response {
 		c.Req.URL.RawQuery = "disableAutoLogin=true"
 		hs.LoginView(c)
+		return response.Empty(http.StatusOK)
 	})
 
 	setting.OAuthAutoLogin = true
@@ -577,12 +568,13 @@ func setupAuthProxyLoginTest(t *testing.T, enableLoginToken bool) *scenarioConte
 		SocialService:    &mockSocialService{},
 	}
 
-	sc.defaultHandler = routing.Wrap(func(c *models.ReqContext) {
+	sc.defaultHandler = routing.Wrap(func(c *models.ReqContext) response.Response {
 		c.IsSignedIn = true
 		c.SignedInUser = &models.SignedInUser{
 			UserId: 10,
 		}
 		hs.LoginView(c)
+		return response.Empty(http.StatusOK)
 	})
 
 	sc.cfg.AuthProxyEnabled = true
@@ -613,25 +605,24 @@ func TestLoginPostRunLokingHook(t *testing.T) {
 		HooksService:     hookService,
 	}
 
-	sc.defaultHandler = routing.Wrap(func(w http.ResponseWriter, c *models.ReqContext) response.Response {
-		cmd := dtos.LoginCommand{
-			User:     "admin",
-			Password: "admin",
-		}
-		return hs.LoginPost(c, cmd)
+	sc.defaultHandler = routing.Wrap(func(c *models.ReqContext) response.Response {
+		c.Req.Header.Set("Content-Type", "application/json")
+		c.Req.Body = io.NopCloser(bytes.NewBufferString(`{"user":"admin","password":"admin"}`))
+		x := hs.LoginPost(c)
+		return x
 	})
 
 	testHook := loginHookTest{}
 	hookService.AddLoginHook(testHook.LoginHook)
 
-	testUser := &models.User{
-		Id:    42,
+	testUser := &user.User{
+		ID:    42,
 		Email: "",
 	}
 
 	testCases := []struct {
 		desc       string
-		authUser   *models.User
+		authUser   *user.User
 		authModule string
 		authErr    error
 		info       models.LoginInfo
@@ -678,12 +669,7 @@ func TestLoginPostRunLokingHook(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.desc, func(t *testing.T) {
-			bus.AddHandler("grafana-auth", func(query *models.LoginUserQuery) error {
-				query.User = c.authUser
-				query.AuthModule = c.authModule
-				return c.authErr
-			})
-
+			hs.authenticator = &fakeAuthenticator{c.authUser, c.authModule, c.authErr}
 			sc.m.Post(sc.url, sc.defaultHandler)
 			sc.fakeReqNoAssertions("POST", sc.url).exec()
 
@@ -695,7 +681,7 @@ func TestLoginPostRunLokingHook(t *testing.T) {
 
 			if c.info.User != nil {
 				require.NotEmpty(t, info.User)
-				assert.Equal(t, c.info.User.Id, info.User.Id)
+				assert.Equal(t, c.info.User.ID, info.User.ID)
 			}
 		})
 	}
@@ -728,4 +714,16 @@ func (m *mockSocialService) GetOAuthHttpClient(name string) (*http.Client, error
 
 func (m *mockSocialService) GetConnector(string) (social.SocialConnector, error) {
 	return m.socialConnector, m.err
+}
+
+type fakeAuthenticator struct {
+	ExpectedUser       *user.User
+	ExpectedAuthModule string
+	ExpectedError      error
+}
+
+func (fa *fakeAuthenticator) AuthenticateUser(c context.Context, query *models.LoginUserQuery) error {
+	query.User = fa.ExpectedUser
+	query.AuthModule = fa.ExpectedAuthModule
+	return fa.ExpectedError
 }

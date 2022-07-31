@@ -1,5 +1,7 @@
 import React from 'react';
+
 import { HorizontalGroup, LinkButton } from '@grafana/ui';
+
 import { getExternalManageLink } from '../../helpers';
 import { PluginStatus } from '../../types';
 
@@ -9,7 +11,7 @@ type ExternallyManagedButtonProps = {
 };
 
 export function ExternallyManagedButton({ pluginId, pluginStatus }: ExternallyManagedButtonProps) {
-  const externalManageLink = getExternalManageLink(pluginId);
+  const externalManageLink = `${getExternalManageLink(pluginId)}/?tab=installation`;
 
   if (pluginStatus === PluginStatus.UPDATE) {
     return (

@@ -1,14 +1,19 @@
 import React, { PureComponent } from 'react';
 import { connect, ConnectedProps } from 'react-redux';
+
 import { NavModel } from '@grafana/data';
+import { featureEnabled } from '@grafana/runtime';
+import { Page } from 'app/core/components/Page/Page';
+import { contextSrv } from 'app/core/core';
+import { GrafanaRouteComponentProps } from 'app/core/navigation/types';
 import { getNavModel } from 'app/core/selectors/navModel';
-import config from 'app/core/config';
-import Page from 'app/core/components/Page/Page';
-import { UserProfile } from './UserProfile';
-import { UserPermissions } from './UserPermissions';
-import { UserSessions } from './UserSessions';
-import { UserLdapSyncInfo } from './UserLdapSyncInfo';
 import { StoreState, UserDTO, UserOrg, UserSession, SyncInfo, UserAdminError, AccessControlAction } from 'app/types';
+
+import { UserLdapSyncInfo } from './UserLdapSyncInfo';
+import { UserOrgs } from './UserOrgs';
+import { UserPermissions } from './UserPermissions';
+import { UserProfile } from './UserProfile';
+import { UserSessions } from './UserSessions';
 import {
   loadAdminUserPage,
   revokeSession,
@@ -24,9 +29,6 @@ import {
   deleteOrgUser,
   syncLdapUser,
 } from './state/actions';
-import { UserOrgs } from './UserOrgs';
-import { GrafanaRouteComponentProps } from 'app/core/navigation/types';
-import { contextSrv } from 'app/core/core';
 
 interface OwnProps extends GrafanaRouteComponentProps<{ id: string }> {
   navModel: NavModel;
@@ -119,7 +121,7 @@ export class UserAdminPage extends PureComponent<Props> {
                 onUserEnable={this.onUserEnable}
                 onPasswordChange={this.onPasswordChange}
               />
-              {isLDAPUser && config.licenseInfo.hasLicense && ldapSyncInfo && canReadLDAPStatus && (
+              {isLDAPUser && featureEnabled('ldapsync') && ldapSyncInfo && canReadLDAPStatus && (
                 <UserLdapSyncInfo ldapSyncInfo={ldapSyncInfo} user={user} onUserSync={this.onUserSync} />
               )}
               <UserPermissions isGrafanaAdmin={user.isGrafanaAdmin} onGrafanaAdminChange={this.onGrafanaAdminChange} />
@@ -128,6 +130,7 @@ export class UserAdminPage extends PureComponent<Props> {
 
           {orgs && (
             <UserOrgs
+              user={user}
               orgs={orgs}
               isExternalUser={user?.isExternal}
               onOrgRemove={this.onOrgRemove}

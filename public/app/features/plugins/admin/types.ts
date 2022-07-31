@@ -1,4 +1,5 @@
 import { EntityState } from '@reduxjs/toolkit';
+
 import {
   PluginType,
   PluginSignatureStatus,
@@ -6,9 +7,15 @@ import {
   PluginDependencies,
   PluginErrorCode,
 } from '@grafana/data';
+import { IconName } from '@grafana/ui';
 import { StoreState, PluginsState } from 'app/types';
 
 export type PluginTypeCode = 'app' | 'panel' | 'datasource';
+
+export enum PluginListDisplayMode {
+  Grid = 'grid',
+  List = 'list',
+}
 
 export enum PluginAdminRoutes {
   Home = 'plugins-home',
@@ -19,11 +26,12 @@ export enum PluginAdminRoutes {
   DetailsAdmin = 'plugins-details-admin',
 }
 
-export enum IconName {
+export enum PluginIconName {
   app = 'apps',
   datasource = 'database',
   panel = 'credit-card',
-  renderer = 'pen',
+  renderer = 'capture',
+  secretsmanager = 'key-skeleton-alt',
 }
 
 export interface CatalogPlugin {
@@ -37,6 +45,8 @@ export interface CatalogPlugin {
   isEnterprise: boolean;
   isInstalled: boolean;
   isDisabled: boolean;
+  // `isPublished` is TRUE if the plugin is published to grafana.com
+  isPublished: boolean;
   name: string;
   orgName: string;
   signature: PluginSignatureStatus;
@@ -46,7 +56,7 @@ export interface CatalogPlugin {
   publishedAt: string;
   type?: PluginType;
   updatedAt: string;
-  version: string;
+  installedVersion?: string;
   details?: CatalogPluginDetails;
   error?: PluginErrorCode;
 }
@@ -140,7 +150,6 @@ export type LocalPlugin = {
     version: string;
     updated: string;
   };
-  latestVersion: string;
   name: string;
   pinned: boolean;
   signature: PluginSignatureStatus;
@@ -148,6 +157,7 @@ export type LocalPlugin = {
   signatureType: PluginSignatureType;
   state: string;
   type: PluginType;
+  dependencies: PluginDependencies;
 };
 
 interface Rel {
@@ -165,6 +175,8 @@ export interface Build {
 export interface Version {
   version: string;
   createdAt: string;
+  isCompatible: boolean;
+  grafanaDependency: string | null;
 }
 
 export interface PluginDetails {
@@ -201,6 +213,15 @@ export enum PluginTabLabels {
   VERSIONS = 'Version history',
   CONFIG = 'Config',
   DASHBOARDS = 'Dashboards',
+  USAGE = 'Usage',
+}
+
+export enum PluginTabIds {
+  OVERVIEW = 'overview',
+  VERSIONS = 'version-history',
+  CONFIG = 'config',
+  DASHBOARDS = 'dashboards',
+  USAGE = 'usage',
 }
 
 export enum RequestStatus {
@@ -208,6 +229,10 @@ export enum RequestStatus {
   Fulfilled = 'Fulfilled',
   Rejected = 'Rejected',
 }
+export type RemotePluginResponse = {
+  plugins: RemotePlugin[];
+  error?: Error;
+};
 
 export type RequestInfo = {
   status: RequestStatus;
@@ -219,12 +244,18 @@ export type RequestInfo = {
 
 export type PluginDetailsTab = {
   label: PluginTabLabels | string;
+  icon?: IconName | string;
+  id: PluginTabIds | string;
+  href?: string;
 };
 
 // TODO<remove `PluginsState &` when the "plugin_admin_enabled" feature flag is removed>
 export type ReducerState = PluginsState & {
   items: EntityState<CatalogPlugin>;
   requests: Record<string, RequestInfo>;
+  settings: {
+    displayMode: PluginListDisplayMode;
+  };
 };
 
 // TODO<remove when the "plugin_admin_enabled" feature flag is removed>
@@ -246,4 +277,6 @@ export type PluginVersion = {
   status: string;
   downloadSlug: string;
   links: Array<{ rel: string; href: string }>;
+  isCompatible: boolean;
+  grafanaDependency: string | null;
 };

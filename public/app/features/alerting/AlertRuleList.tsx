@@ -1,20 +1,23 @@
 import React, { PureComponent } from 'react';
 import { connect, ConnectedProps } from 'react-redux';
-import Page from 'app/core/components/Page/Page';
-import AlertRuleItem from './AlertRuleItem';
-import appEvents from 'app/core/app_events';
-import { getNavModel } from 'app/core/selectors/navModel';
-import { AlertRule, StoreState } from 'app/types';
-import { getAlertRulesAsync, togglePauseAlertRule } from './state/actions';
-import { getAlertRuleItems, getSearchQuery } from './state/selectors';
-import { FilterInput } from 'app/core/components/FilterInput/FilterInput';
+
 import { SelectableValue } from '@grafana/data';
 import { config, locationService } from '@grafana/runtime';
-import { setSearchQuery } from './state/reducers';
-import { Button, LinkButton, Select, VerticalGroup } from '@grafana/ui';
+import { Button, FilterInput, LinkButton, Select, VerticalGroup } from '@grafana/ui';
+import appEvents from 'app/core/app_events';
+import { Page } from 'app/core/components/Page/Page';
 import { GrafanaRouteComponentProps } from 'app/core/navigation/types';
+import { getNavModel } from 'app/core/selectors/navModel';
+import { AlertRule, StoreState } from 'app/types';
+
 import { ShowModalReactEvent } from '../../types/events';
+
 import { AlertHowToModal } from './AlertHowToModal';
+import AlertRuleItem from './AlertRuleItem';
+import { DeprecationNotice } from './components/DeprecationNotice';
+import { getAlertRulesAsync, togglePauseAlertRule } from './state/actions';
+import { setSearchQuery } from './state/reducers';
+import { getAlertRuleItems, getSearchQuery } from './state/selectors';
 
 function mapStateToProps(state: StoreState) {
   return {
@@ -101,11 +104,13 @@ export class AlertRuleListUnconnected extends PureComponent<Props> {
               <FilterInput placeholder="Search alerts" value={search} onChange={this.onSearchQueryChange} />
             </div>
             <div className="gf-form">
-              <label className="gf-form-label">States</label>
+              <label className="gf-form-label" htmlFor="alert-state-filter">
+                States
+              </label>
 
               <div className="width-13">
                 <Select
-                  menuShouldPortal
+                  inputId={'alert-state-filter'}
                   options={this.stateFilters}
                   onChange={this.onStateFilterChanged}
                   value={this.getStateFilter()}
@@ -113,7 +118,7 @@ export class AlertRuleListUnconnected extends PureComponent<Props> {
               </div>
             </div>
             <div className="page-action-bar__spacer" />
-            {config.featureToggles.ngalert && (
+            {config.unifiedAlertingEnabled && (
               <LinkButton variant="primary" href="alerting/ng/new">
                 Add NG Alert
               </LinkButton>
@@ -122,6 +127,7 @@ export class AlertRuleListUnconnected extends PureComponent<Props> {
               How to add an alert
             </Button>
           </div>
+          <DeprecationNotice />
           <VerticalGroup spacing="none">
             {alertRules.map((rule) => {
               return (

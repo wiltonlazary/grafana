@@ -1,10 +1,12 @@
 import { PanelPlugin } from '@grafana/data';
+
 import { DebugPanel } from './DebugPanel';
+import { StateViewEditor } from './StateView';
 import { DebugMode, DebugPanelOptions } from './types';
 
 export const plugin = new PanelPlugin<DebugPanelOptions>(DebugPanel).useFieldConfig().setPanelOptions((builder) => {
   builder
-    .addRadio({
+    .addSelect({
       path: 'mode',
       name: 'Mode',
       defaultValue: DebugMode.Render,
@@ -13,8 +15,19 @@ export const plugin = new PanelPlugin<DebugPanelOptions>(DebugPanel).useFieldCon
           { label: 'Render', value: DebugMode.Render },
           { label: 'Events', value: DebugMode.Events },
           { label: 'Cursor', value: DebugMode.Cursor },
+          { label: 'Cursor', value: DebugMode.Cursor },
+          { label: 'Share state', value: DebugMode.State },
+          { label: 'Throw error', value: DebugMode.ThrowError },
         ],
       },
+    })
+    .addCustomEditor({
+      id: 'stateView',
+      path: 'stateView',
+      name: 'State view',
+      defaultValue: '',
+      showIf: ({ mode }) => mode === DebugMode.State,
+      editor: StateViewEditor,
     })
     .addBooleanSwitch({
       path: 'counters.render',

@@ -1,3 +1,5 @@
+import React from 'react';
+
 import {
   EventBusSrv,
   EventBus,
@@ -5,8 +7,9 @@ import {
   AnnotationEventUIModel,
   ThresholdsConfig,
   SplitOpen,
+  CoreApp,
 } from '@grafana/data';
-import React from 'react';
+
 import { SeriesVisibilityChangeMode } from '.';
 
 /** @alpha */
@@ -14,7 +17,10 @@ export interface PanelContext {
   eventBus: EventBus;
 
   /** Dashboard panels sync */
-  sync?: DashboardCursorSync;
+  sync?: () => DashboardCursorSync;
+
+  /** Information on what the outer container is */
+  app?: CoreApp | 'string';
 
   /**
    * Called when a component wants to change the color for a series
@@ -26,6 +32,8 @@ export interface PanelContext {
   onToggleSeriesVisibility?: (label: string, mode: SeriesVisibilityChangeMode) => void;
 
   canAddAnnotations?: () => boolean;
+  canEditAnnotations?: (dashboardId: number) => boolean;
+  canDeleteAnnotations?: (dashboardId: number) => boolean;
   onAnnotationCreate?: (annotation: AnnotationEventUIModel) => void;
   onAnnotationUpdate?: (annotation: AnnotationEventUIModel) => void;
   onAnnotationDelete?: (id: string) => void;
@@ -43,11 +51,23 @@ export interface PanelContext {
    * @alpha -- experimental
    */
   onThresholdsChange?: (thresholds: ThresholdsConfig) => void;
+
   /**
    * onSplitOpen is used in Explore to open the split view. It can be used in panels which has intercations and used in Explore as well.
    * For example TimeSeries panel.
    */
   onSplitOpen?: SplitOpen;
+
+  /** For instance state that can be shared between panel & options UI  */
+  instanceState?: any;
+
+  /** Update instance state, this is only supported in dashboard panel context currently */
+  onInstanceStateChange?: (state: any) => void;
+
+  /**
+   * Called when a panel is changing the sort order of the legends.
+   */
+  onToggleLegendSort?: (sortBy: string) => void;
 }
 
 export const PanelContextRoot = React.createContext<PanelContext>({

@@ -1,6 +1,5 @@
-import { getGrafanaLiveSrv, locationService } from '@grafana/runtime';
-import { getDashboardSrv } from '../../dashboard/services/DashboardSrv';
-import { appEvents } from 'app/core/core';
+import { Unsubscribable } from 'rxjs';
+
 import {
   AppEvents,
   isLiveChannelMessageEvent,
@@ -10,12 +9,15 @@ import {
   LiveChannelEvent,
   LiveChannelScope,
 } from '@grafana/data';
+import { getGrafanaLiveSrv, locationService } from '@grafana/runtime';
+import { appEvents, contextSrv } from 'app/core/core';
+import { sessionId } from 'app/features/live';
+
+import { ShowModalReactEvent } from '../../../types/events';
+import { getDashboardSrv } from '../../dashboard/services/DashboardSrv';
+
 import { DashboardChangedModal } from './DashboardChangedModal';
 import { DashboardEvent, DashboardEventAction } from './types';
-import { CoreGrafanaLiveFeature } from '../scopes';
-import { sessionId } from '../live';
-import { ShowModalReactEvent } from '../../../types/events';
-import { Unsubscribable } from 'rxjs';
 
 class DashboardWatcher {
   channel?: LiveChannelAddress; // path to the channel
@@ -24,12 +26,14 @@ class DashboardWatcher {
   editing = false;
   lastEditing?: DashboardEvent;
   subscription?: Unsubscribable;
+  hasSeenNotice?: boolean;
 
   setEditingState(state: boolean) {
     const changed = (this.editing = state);
     this.editing = state;
+    this.hasSeenNotice = false;
 
-    if (changed) {
+    if (changed && contextSrv.isEditor) {
       this.sendEditingState();
     }
   }
@@ -61,7 +65,7 @@ class DashboardWatcher {
       };
       this.leave();
       if (uid) {
-        this.subscription = live.getStream(this.channel).subscribe(this.observer);
+        this.subscription = live.getStream<DashboardEvent>(this.channel).subscribe(this.observer);
       }
       this.uid = uid;
     }
@@ -131,10 +135,11 @@ class DashboardWatcher {
                 this.reloadPage();
               }
             } else if (showPopup) {
-              if (action === DashboardEventAction.EditingStarted) {
+              if (action === DashboardEventAction.EditingStarted && !this.hasSeenNotice) {
                 const editingEvent = event.message;
                 const recent = this.getRecentEditingEvent();
                 if (!recent || recent.message !== editingEvent.message) {
+                  this.hasSeenNotice = true;
                   appEvents.emit(AppEvents.alertWarning, [
                     'Another session is editing this dashboard',
                     editingEvent.message,
@@ -156,16 +161,3 @@ class DashboardWatcher {
 }
 
 export const dashboardWatcher = new DashboardWatcher();
-
-export function getDashboardChannelsFeature(): CoreGrafanaLiveFeature {
-  return {
-    name: 'dashboard',
-    support: {
-      getChannelConfig: (path: string) => ({
-        description: 'Dashboard change events',
-        hasPresence: true,
-      }),
-    },
-    description: 'Dashboard listener',
-  };
-}

@@ -1,23 +1,37 @@
+import { isEmpty, isObject, mapValues, omitBy } from 'lodash';
+
 import {
+  AbsoluteTimeRange,
   DataSourceApi,
+  DataSourceRef,
   EventBusExtended,
   ExploreUrlState,
   getDefaultTimeRange,
   HistoryItem,
   LoadingState,
   PanelData,
-  AbsoluteTimeRange,
 } from '@grafana/data';
+import { ExplorePanelData } from 'app/types';
+import { ExploreGraphStyle, ExploreItemState } from 'app/types/explore';
 
-import { ExploreItemState } from 'app/types/explore';
-import { getDatasourceSrv } from '../../plugins/datasource_srv';
 import store from '../../../core/store';
-import { clearQueryKeys, lastUsedDatasourceKeyForOrgId } from '../../../core/utils/explore';
+import { clearQueryKeys, lastUsedDatasourceKeyForOrgId, toGraphStyle } from '../../../core/utils/explore';
+import { getDatasourceSrv } from '../../plugins/datasource_srv';
 import { toRawTimeRange } from '../utils/time';
 
 export const DEFAULT_RANGE = {
   from: 'now-6h',
   to: 'now',
+};
+
+const GRAPH_STYLE_KEY = 'grafana.explore.style.graph';
+export const storeGraphStyle = (graphStyle: string): void => {
+  store.set(GRAPH_STYLE_KEY, graphStyle);
+};
+
+const loadGraphStyle = (): ExploreGraphStyle => {
+  const data = store.get(GRAPH_STYLE_KEY);
+  return toGraphStyle(data);
 };
 
 /**
@@ -48,23 +62,37 @@ export const makeExplorePaneState = (): ExploreItemState => ({
   tableResult: null,
   graphResult: null,
   logsResult: null,
-  eventBridge: (null as unknown) as EventBusExtended,
+  eventBridge: null as unknown as EventBusExtended,
   cache: [],
+  richHistory: [],
+  logsVolumeDataProvider: undefined,
+  logsVolumeData: undefined,
+  graphStyle: loadGraphStyle(),
+  panelsState: {},
 });
 
-export const createEmptyQueryResponse = (): PanelData => ({
+export const createEmptyQueryResponse = (): ExplorePanelData => ({
   state: LoadingState.NotStarted,
   series: [],
   timeRange: getDefaultTimeRange(),
+  graphFrames: [],
+  logsFrames: [],
+  traceFrames: [],
+  nodeGraphFrames: [],
+  tableFrames: [],
+  graphResult: null,
+  logsResult: null,
+  tableResult: null,
 });
 
 export async function loadAndInitDatasource(
   orgId: number,
-  datasourceUid?: string
+  datasource: DataSourceRef | string
 ): Promise<{ history: HistoryItem[]; instance: DataSourceApi }> {
   let instance;
   try {
-    instance = await getDatasourceSrv().get(datasourceUid);
+    // let datasource be a ref if we have the info, otherwise a name or uid will do for lookup
+    instance = await getDatasourceSrv().get(datasource);
   } catch (error) {
     // Falling back to the default data source in case the provided data source was not found.
     // It may happen if last used data source or the data source provided in the URL has been
@@ -81,20 +109,33 @@ export async function loadAndInitDatasource(
   }
 
   const historyKey = `grafana.explore.history.${instance.meta?.id}`;
-  const history = store.getObject(historyKey, []);
+  const history = store.getObject<HistoryItem[]>(historyKey, []);
   // Save last-used datasource
 
   store.set(lastUsedDatasourceKeyForOrgId(orgId), instance.uid);
   return { history, instance };
 }
 
+// recursively walks an object, removing keys where the value is undefined
+// if the resulting object is empty, returns undefined
+function pruneObject(obj: object): object | undefined {
+  let pruned = mapValues(obj, (value) => (isObject(value) ? pruneObject(value) : value));
+  pruned = omitBy<typeof pruned>(pruned, isEmpty);
+  if (isEmpty(pruned)) {
+    return undefined;
+  }
+  return pruned;
+}
+
 export function getUrlStateFromPaneState(pane: ExploreItemState): ExploreUrlState {
   return {
     // datasourceInstance should not be undefined anymore here but in case there is some path for it to be undefined
     // lets just fallback instead of crashing.
-    datasource: pane.datasourceInstance?.name || '',
+    datasource: pane.datasourceInstance?.uid || '',
     queries: pane.queries.map(clearQueryKeys),
     range: toRawTimeRange(pane.range),
+    // don't include panelsState in the url unless a piece of state is actually set
+    panelsState: pruneObject(pane.panelsState),
   };
 }
 

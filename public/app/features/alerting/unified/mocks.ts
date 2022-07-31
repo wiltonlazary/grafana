@@ -1,17 +1,14 @@
-import { DataSourceApi, DataSourceInstanceSettings, DataSourcePluginMeta, ScopedVars } from '@grafana/data';
 import {
-  GrafanaAlertStateDecision,
-  GrafanaRuleDefinition,
-  PromAlertingRuleState,
-  PromRuleType,
-  RulerAlertingRuleDTO,
-  RulerGrafanaRuleDTO,
-  RulerRuleGroupDTO,
-  RulerRulesConfigDTO,
-} from 'app/types/unified-alerting-dto';
-import { AlertingRule, Alert, RecordingRule, RuleGroup, RuleNamespace } from 'app/types/unified-alerting';
-import DatasourceSrv from 'app/features/plugins/datasource_srv';
-import { DataSourceSrv, GetDataSourceListFilters, config } from '@grafana/runtime';
+  DataSourceApi,
+  DataSourceInstanceSettings,
+  DataSourceJsonData,
+  DataSourcePluginMeta,
+  DataSourceRef,
+  ScopedVars,
+} from '@grafana/data';
+import { config, DataSourceSrv, GetDataSourceListFilters } from '@grafana/runtime';
+import { contextSrv } from 'app/core/services/context_srv';
+import { DatasourceSrv } from 'app/features/plugins/datasource_srv';
 import {
   AlertmanagerAlert,
   AlertManagerCortexConfig,
@@ -22,13 +19,25 @@ import {
   Silence,
   SilenceState,
 } from 'app/plugins/datasource/alertmanager/types';
+import { AccessControlAction, FolderDTO } from 'app/types';
+import { Alert, AlertingRule, CombinedRule, RecordingRule, RuleGroup, RuleNamespace } from 'app/types/unified-alerting';
+import {
+  GrafanaAlertStateDecision,
+  GrafanaRuleDefinition,
+  PromAlertingRuleState,
+  PromRuleType,
+  RulerAlertingRuleDTO,
+  RulerGrafanaRuleDTO,
+  RulerRuleGroupDTO,
+  RulerRulesConfigDTO,
+} from 'app/types/unified-alerting-dto';
 
 let nextDataSourceId = 1;
 
-export const mockDataSource = (
-  partial: Partial<DataSourceInstanceSettings> = {},
+export function mockDataSource<T extends DataSourceJsonData = DataSourceJsonData>(
+  partial: Partial<DataSourceInstanceSettings<T>> = {},
   meta: Partial<DataSourcePluginMeta> = {}
-): DataSourceInstanceSettings<any> => {
+): DataSourceInstanceSettings<T> {
   const id = partial.id ?? nextDataSourceId++;
 
   return {
@@ -37,8 +46,8 @@ export const mockDataSource = (
     type: 'prometheus',
     name: `Prometheus-${id}`,
     access: 'proxy',
-    jsonData: {},
-    meta: ({
+    jsonData: {} as T,
+    meta: {
       info: {
         logos: {
           small: 'https://prometheus.io/assets/prometheus_logo_grey.svg',
@@ -46,10 +55,10 @@ export const mockDataSource = (
         },
       },
       ...meta,
-    } as any) as DataSourcePluginMeta,
+    } as any as DataSourcePluginMeta,
     ...partial,
   };
-};
+}
 
 export const mockPromAlert = (partial: Partial<Alert> = {}): Alert => ({
   activeAt: '2021-03-18T13:47:05.04938691Z',
@@ -221,6 +230,7 @@ export const mockSilence = (partial: Partial<Silence> = {}): Silence => {
     ...partial,
   };
 };
+
 export class MockDataSourceSrv implements DataSourceSrv {
   datasources: Record<string, DataSourceApi> = {};
   // @ts-ignore
@@ -232,6 +242,7 @@ export class MockDataSourceSrv implements DataSourceSrv {
     getVariables: () => [],
     replace: (name: any) => name,
   };
+
   defaultName = '';
 
   constructor(datasources: Record<string, DataSourceInstanceSettings>) {
@@ -243,6 +254,7 @@ export class MockDataSourceSrv implements DataSourceSrv {
       },
       {}
     );
+
     for (const dsSettings of Object.values(this.settingsMapByName)) {
       this.settingsMapByUid[dsSettings.uid] = dsSettings;
       this.settingsMapById[dsSettings.id] = dsSettings;
@@ -252,7 +264,7 @@ export class MockDataSourceSrv implements DataSourceSrv {
     }
   }
 
-  get(name?: string | null, scopedVars?: ScopedVars): Promise<DataSourceApi> {
+  get(name?: string | null | DataSourceRef, scopedVars?: ScopedVars): Promise<DataSourceApi> {
     return DatasourceSrv.prototype.get.call(this, name, scopedVars);
     //return Promise.reject(new Error('not implemented'));
   }
@@ -270,13 +282,15 @@ export class MockDataSourceSrv implements DataSourceSrv {
   getInstanceSettings(nameOrUid: string | null | undefined): DataSourceInstanceSettings | undefined {
     return (
       DatasourceSrv.prototype.getInstanceSettings.call(this, nameOrUid) ||
-      (({ meta: { info: { logos: {} } } } as unknown) as DataSourceInstanceSettings)
+      ({ meta: { info: { logos: {} } } } as unknown as DataSourceInstanceSettings)
     );
   }
 
   async loadDatasource(name: string): Promise<DataSourceApi<any, any>> {
     return DatasourceSrv.prototype.loadDatasource.call(this, name);
   }
+
+  reload() {}
 }
 
 export const mockGrafanaReceiver = (
@@ -351,6 +365,14 @@ export const someCloudAlertManagerConfig: AlertManagerCortexConfig = {
   alertmanager_config: {
     route: {
       receiver: 'cloud-receiver',
+      routes: [
+        {
+          receiver: 'foo-receiver',
+        },
+        {
+          receiver: 'bar-receiver',
+        },
+      ],
     },
     receivers: [
       {
@@ -409,4 +431,52 @@ export const someRulerRules: RulerRulesConfigDTO = {
     mockRulerRuleGroup({ name: 'group2', rules: [mockRulerAlertingRule({ alert: 'alert2' })] }),
   ],
   namespace2: [mockRulerRuleGroup({ name: 'group3', rules: [mockRulerAlertingRule({ alert: 'alert3' })] })],
+};
+
+export const mockCombinedRule = (partial?: Partial<CombinedRule>): CombinedRule => ({
+  name: 'mockRule',
+  query: 'expr',
+  group: {
+    name: 'mockCombinedRuleGroup',
+    rules: [],
+  },
+  namespace: {
+    name: 'mockCombinedNamespace',
+    groups: [{ name: 'mockCombinedRuleGroup', rules: [] }],
+    rulesSource: 'grafana',
+  },
+  labels: {},
+  annotations: {},
+  promRule: mockPromAlertingRule(),
+  rulerRule: mockRulerAlertingRule(),
+  ...partial,
+});
+
+export const mockFolder = (partial?: Partial<FolderDTO>): FolderDTO => {
+  return {
+    id: 1,
+    uid: 'gdev-1',
+    title: 'Gdev',
+    version: 1,
+    url: '',
+    canAdmin: true,
+    canDelete: true,
+    canEdit: true,
+    canSave: true,
+    ...partial,
+  };
+};
+
+export const enableRBAC = () => {
+  jest.spyOn(contextSrv, 'accessControlEnabled').mockReturnValue(true);
+};
+
+export const disableRBAC = () => {
+  jest.spyOn(contextSrv, 'accessControlEnabled').mockReturnValue(false);
+};
+
+export const grantUserPermissions = (permissions: AccessControlAction[]) => {
+  jest
+    .spyOn(contextSrv, 'hasPermission')
+    .mockImplementation((action) => permissions.includes(action as AccessControlAction));
 };

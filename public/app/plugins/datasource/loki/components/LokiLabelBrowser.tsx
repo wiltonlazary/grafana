@@ -1,4 +1,10 @@
+import { css, cx } from '@emotion/css';
+import { sortBy } from 'lodash';
 import React, { ChangeEvent } from 'react';
+import { FixedSizeList } from 'react-window';
+
+import { CoreApp, GrafanaTheme2 } from '@grafana/data';
+import { reportInteraction } from '@grafana/runtime';
 import {
   Button,
   HighlightPart,
@@ -10,13 +16,10 @@ import {
   BrowserLabel as LokiLabel,
   fuzzyMatch,
 } from '@grafana/ui';
-import LokiLanguageProvider from '../language_provider';
+
 import PromQlLanguageProvider from '../../prometheus/language_provider';
-import { css, cx } from '@emotion/css';
-import store from 'app/core/store';
-import { FixedSizeList } from 'react-window';
-import { GrafanaTheme2 } from '@grafana/data';
-import { sortBy } from 'lodash';
+import LokiLanguageProvider from '../language_provider';
+import { escapeLabelValueInExactSelector, escapeLabelValueInRegexSelector } from '../language_utils';
 
 // Hard limit on labels to render
 const MAX_LABEL_COUNT = 1000;
@@ -24,15 +27,17 @@ const MAX_VALUE_COUNT = 10000;
 const MAX_AUTO_SELECT = 4;
 const EMPTY_SELECTOR = '{}';
 
-export const LAST_USED_LABELS_KEY = 'grafana.datasources.loki.browser.labels';
-
 export interface BrowserProps {
   // TODO #33976: Is it possible to use a common interface here? For example: LabelsLanguageProvider
   languageProvider: LokiLanguageProvider | PromQlLanguageProvider;
   onChange: (selector: string) => void;
   theme: GrafanaTheme2;
+  app?: CoreApp;
   autoSelect?: number;
   hide?: () => void;
+  lastUsedLabels: string[];
+  storeLastUsedLabels: (labels: string[]) => void;
+  deleteLastUsedLabels: () => void;
 }
 
 interface BrowserState {
@@ -65,9 +70,9 @@ export function buildSelector(labels: SelectableLabel[]): string {
     if (label.selected && label.values && label.values.length > 0) {
       const selectedValues = label.values.filter((value) => value.selected).map((value) => value.name);
       if (selectedValues.length > 1) {
-        selectedLabels.push(`${label.name}=~"${selectedValues.join('|')}"`);
+        selectedLabels.push(`${label.name}=~"${selectedValues.map(escapeLabelValueInRegexSelector).join('|')}"`);
       } else if (selectedValues.length === 1) {
-        selectedLabels.push(`${label.name}="${selectedValues[0]}"`);
+        selectedLabels.push(`${label.name}="${escapeLabelValueInExactSelector(selectedValues[0])}"`);
       }
     }
   }
@@ -186,17 +191,29 @@ export class UnthemedLokiLabelBrowser extends React.Component<BrowserProps, Brow
   };
 
   onClickRunLogsQuery = () => {
+    reportInteraction('grafana_loki_log_browser_closed', {
+      app: this.props.app,
+      closeType: 'showLogsButton',
+    });
     const selector = buildSelector(this.state.labels);
     this.props.onChange(selector);
   };
 
   onClickRunMetricsQuery = () => {
+    reportInteraction('grafana_loki_log_browser_closed', {
+      app: this.props.app,
+      closeType: 'showLogsRateButton',
+    });
     const selector = buildSelector(this.state.labels);
     const query = `rate(${selector}[$__interval])`;
     this.props.onChange(query);
   };
 
   onClickClear = () => {
+    reportInteraction('grafana_loki_log_browser_closed', {
+      app: this.props.app,
+      closeType: 'clearButton',
+    });
     this.setState((state) => {
       const labels: SelectableLabel[] = state.labels.map((label) => ({
         ...label,
@@ -208,7 +225,7 @@ export class UnthemedLokiLabelBrowser extends React.Component<BrowserProps, Brow
       }));
       return { labels, searchTerm: '', status: '', error: '', validationStatus: '' };
     });
-    store.delete(LAST_USED_LABELS_KEY);
+    this.props.deleteLastUsedLabels();
   };
 
   onClickLabel = (name: string, value: string | undefined, event: React.MouseEvent<HTMLElement>) => {
@@ -261,9 +278,9 @@ export class UnthemedLokiLabelBrowser extends React.Component<BrowserProps, Brow
   }
 
   componentDidMount() {
-    const { languageProvider, autoSelect = MAX_AUTO_SELECT } = this.props;
+    const { languageProvider, autoSelect = MAX_AUTO_SELECT, lastUsedLabels } = this.props;
     if (languageProvider) {
-      const selectedLabels: string[] = store.getObject(LAST_USED_LABELS_KEY, []);
+      const selectedLabels: string[] = lastUsedLabels;
       languageProvider.start().then(() => {
         let rawLabels: string[] = languageProvider.getLabelKeys();
         if (rawLabels.length > MAX_LABEL_COUNT) {
@@ -295,7 +312,7 @@ export class UnthemedLokiLabelBrowser extends React.Component<BrowserProps, Brow
       return;
     }
     const selectedLabels = this.state.labels.filter((label) => label.selected).map((label) => label.name);
-    store.setObject(LAST_USED_LABELS_KEY, selectedLabels);
+    this.props.storeLastUsedLabels(selectedLabels);
     if (label.selected) {
       // Refetch values for newly selected label...
       if (!label.values) {
@@ -361,9 +378,7 @@ export class UnthemedLokiLabelBrowser extends React.Component<BrowserProps, Brow
         return;
       }
       if (Object.keys(possibleLabels).length === 0) {
-        // Sometimes the backend does not return a valid set
-        console.error('No results for label combination, but should not occur.');
-        this.setState({ error: `Facetting failed for ${selector}` });
+        this.setState({ error: `Empty results, no matching label for ${selector}` });
         return;
       }
       const labels: SelectableLabel[] = facetLabels(this.state.labels, possibleLabels, lastFacetted);

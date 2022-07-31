@@ -1,19 +1,18 @@
-import React, { PureComponent } from 'react';
+import { Trans, t } from '@lingui/macro';
 import { saveAs } from 'file-saver';
-import { getBackendSrv } from 'app/core/services/backend_srv';
-import { Button, Field, Modal, Switch } from '@grafana/ui';
-import { DashboardModel, PanelModel } from 'app/features/dashboard/state';
-import { DashboardExporter } from 'app/features/dashboard/components/DashExportModal';
-import { appEvents } from 'app/core/core';
-import { ShowModalReactEvent } from 'app/types/events';
-import { ViewJsonModal } from './ViewJsonModal';
-import { config } from '@grafana/runtime';
+import React, { PureComponent } from 'react';
 
-interface Props {
-  dashboard: DashboardModel;
-  panel?: PanelModel;
-  onDismiss(): void;
-}
+import { config, reportInteraction } from '@grafana/runtime';
+import { Button, Field, Modal, Switch } from '@grafana/ui';
+import { appEvents } from 'app/core/core';
+import { getBackendSrv } from 'app/core/services/backend_srv';
+import { DashboardExporter } from 'app/features/dashboard/components/DashExportModal';
+import { ShowModalReactEvent } from 'app/types/events';
+
+import { ViewJsonModal } from './ViewJsonModal';
+import { ShareModalTabProps } from './types';
+
+interface Props extends ShareModalTabProps {}
 
 interface State {
   shareExternally: boolean;
@@ -31,6 +30,10 @@ export class ShareExport extends PureComponent<Props, State> {
     };
 
     this.exporter = new DashboardExporter();
+  }
+
+  componentDidMount() {
+    reportInteraction('grafana_dashboards_export_share_viewed');
   }
 
   onShareExternallyChange = () => {
@@ -124,7 +127,7 @@ export class ShareExport extends PureComponent<Props, State> {
       })
     );
 
-    this.props.onDismiss();
+    this.props.onDismiss?.();
   };
 
   render() {
@@ -132,26 +135,38 @@ export class ShareExport extends PureComponent<Props, State> {
     const { shareExternally } = this.state;
     const { trimDefaults } = this.state;
 
+    const exportExternallyTranslation = t({
+      id: 'share-modal.export.share-externally-label',
+      message: `Export for sharing externally`,
+    });
+
+    const exportDefaultTranslation = t({
+      id: 'share-modal.export.share-default-label',
+      message: `Export with default values removed`,
+    });
+
     return (
       <>
-        <p className="share-modal-info-text">Export this dashboard.</p>
-        <Field label="Export for sharing externally">
-          <Switch value={shareExternally} onChange={this.onShareExternallyChange} />
+        <p className="share-modal-info-text">
+          <Trans id="share-modal.export.info-text">Export this dashboard.</Trans>
+        </p>
+        <Field label={exportExternallyTranslation}>
+          <Switch id="share-externally-toggle" value={shareExternally} onChange={this.onShareExternallyChange} />
         </Field>
         {config.featureToggles.trimDefaults && (
-          <Field label="Export with default values removed">
-            <Switch value={trimDefaults} onChange={this.onTrimDefaultsChange} />
+          <Field label={exportDefaultTranslation}>
+            <Switch id="trim-defaults-toggle" value={trimDefaults} onChange={this.onTrimDefaultsChange} />
           </Field>
         )}
         <Modal.ButtonRow>
           <Button variant="secondary" onClick={onDismiss} fill="outline">
-            Cancel
+            <Trans id="share-modal.export.cancel-button">Cancel</Trans>
           </Button>
           <Button variant="secondary" onClick={this.onViewJson}>
-            View JSON
+            <Trans id="share-modal.export.view-button">View JSON</Trans>
           </Button>
           <Button variant="primary" onClick={this.onSaveAsFile}>
-            Save to file
+            <Trans id="share-modal.export.save-button">Save to file</Trans>
           </Button>
         </Modal.ButtonRow>
       </>

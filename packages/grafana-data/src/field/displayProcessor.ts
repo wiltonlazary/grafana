@@ -1,16 +1,18 @@
 // Libraries
-import { toString, toNumber as _toNumber, isEmpty, isBoolean } from 'lodash';
+import { toString, toNumber as _toNumber, isEmpty, isBoolean, isArray, join } from 'lodash';
 
 // Types
-import { Field, FieldType } from '../types/dataFrame';
-import { DisplayProcessor, DisplayValue } from '../types/displayValue';
-import { getValueFormat, isBooleanUnit } from '../valueFormats/valueFormats';
-import { getValueMappingResult } from '../utils/valueMappings';
-import { dateTime, dateTimeParse } from '../datetime';
-import { KeyValue, TimeZone } from '../types';
-import { getScaleCalculator } from './scale';
+import { getFieldTypeFromValue } from '../dataframe/processDataFrame';
+import { toUtc, dateTimeParse } from '../datetime';
 import { GrafanaTheme2 } from '../themes/types';
+import { KeyValue, TimeZone } from '../types';
+import { Field, FieldType } from '../types/dataFrame';
+import { DecimalCount, DisplayProcessor, DisplayValue } from '../types/displayValue';
 import { anyToNumber } from '../utils/anyToNumber';
+import { getValueMappingResult } from '../utils/valueMappings';
+import { getValueFormat, isBooleanUnit } from '../valueFormats/valueFormats';
+
+import { getScaleCalculator } from './scale';
 
 interface DisplayProcessorOptions {
   field: Partial<Field>;
@@ -66,17 +68,19 @@ export function getDisplayProcessor(options?: DisplayProcessorOptions): DisplayP
     if (!isBooleanUnit(unit)) {
       unit = 'bool';
     }
+  } else if (!unit && field.type === FieldType.string) {
+    unit = 'string';
   }
 
   const formatFunc = getValueFormat(unit || 'none');
   const scaleFunc = getScaleCalculator(field, options.theme);
 
-  return (value: any) => {
+  return (value: any, decimals?: DecimalCount) => {
     const { mappings } = config;
     const isStringUnit = unit === 'string';
 
     if (hasDateUnit && typeof value === 'string') {
-      value = dateTime(value).valueOf();
+      value = toUtc(value).valueOf();
     }
 
     let numeric = isStringUnit ? NaN : anyToNumber(value);
@@ -84,6 +88,7 @@ export function getDisplayProcessor(options?: DisplayProcessorOptions): DisplayP
     let prefix: string | undefined;
     let suffix: string | undefined;
     let color: string | undefined;
+    let icon: string | undefined;
     let percent: number | undefined;
 
     if (mappings && mappings.length > 0) {
@@ -97,12 +102,16 @@ export function getDisplayProcessor(options?: DisplayProcessorOptions): DisplayP
         if (mappingResult.color != null) {
           color = options.theme.visualization.getColorByName(mappingResult.color);
         }
+
+        if (mappingResult.icon != null) {
+          icon = mappingResult.icon;
+        }
       }
     }
 
     if (!isNaN(numeric)) {
       if (text == null && !isBoolean(value)) {
-        const v = formatFunc(numeric, config.decimals, null, options.timeZone, showMs);
+        const v = formatFunc(numeric, decimals ?? config.decimals, null, options.timeZone, showMs);
         text = v.text;
         suffix = v.suffix;
         prefix = v.prefix;
@@ -114,6 +123,10 @@ export function getDisplayProcessor(options?: DisplayProcessorOptions): DisplayP
         color = scaleResult.color;
         percent = scaleResult.percent;
       }
+    }
+
+    if (text == null && isArray(value)) {
+      text = join(value, ', ');
     }
 
     if (text == null) {
@@ -133,7 +146,23 @@ export function getDisplayProcessor(options?: DisplayProcessorOptions): DisplayP
       percent = scaleResult.percent;
     }
 
-    return { text, numeric, prefix, suffix, color, percent };
+    const display: DisplayValue = {
+      text,
+      numeric,
+      prefix,
+      suffix,
+      color,
+    };
+
+    if (icon != null) {
+      display.icon = icon;
+    }
+
+    if (percent != null) {
+      display.percent = percent;
+    }
+
+    return display;
   };
 }
 
@@ -143,7 +172,20 @@ function toStringProcessor(value: any): DisplayValue {
 
 export function getRawDisplayProcessor(): DisplayProcessor {
   return (value: any) => ({
-    text: `${value}`,
-    numeric: (null as unknown) as number,
+    text: getFieldTypeFromValue(value) === 'other' ? `${JSON.stringify(value, getCircularReplacer())}` : `${value}`,
+    numeric: null as unknown as number,
   });
 }
+
+const getCircularReplacer = () => {
+  const seen = new WeakSet();
+  return (_key: any, value: object | null) => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return;
+      }
+      seen.add(value);
+    }
+    return value;
+  };
+};

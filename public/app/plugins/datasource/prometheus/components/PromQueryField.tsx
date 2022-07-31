@@ -1,30 +1,33 @@
+import { LanguageMap, languages as prismLanguages } from 'prismjs';
 import React, { ReactNode } from 'react';
-
-import { config } from '@grafana/runtime';
 import { Plugin } from 'slate';
+
+import { QueryEditorProps, QueryHint, isDataFrame, toLegacyResponseData, TimeRange, CoreApp } from '@grafana/data';
 import {
   SlatePrism,
   TypeaheadInput,
   TypeaheadOutput,
-  QueryField,
   BracesPlugin,
   DOMUtil,
   SuggestionsState,
   Icon,
 } from '@grafana/ui';
+import { LocalStorageValueProvider } from 'app/core/components/LocalStorageValueProvider';
+import {
+  CancelablePromise,
+  isCancelablePromiseRejection,
+  makePromiseCancelable,
+} from 'app/core/utils/CancelablePromise';
 
-import { LanguageMap, languages as prismLanguages } from 'prismjs';
-
-// dom also includes Element polyfills
-import { PromQuery, PromOptions } from '../types';
-import { roundMsToMin } from '../language_utils';
-import { CancelablePromise, makePromiseCancelable } from 'app/core/utils/CancelablePromise';
-import { QueryEditorProps, QueryHint, isDataFrame, toLegacyResponseData, TimeRange } from '@grafana/data';
 import { PrometheusDatasource } from '../datasource';
+import { roundMsToMin } from '../language_utils';
+import { PromQuery, PromOptions } from '../types';
+
 import { PrometheusMetricsBrowser } from './PrometheusMetricsBrowser';
-import { MonacoQueryFieldLazy } from './monaco-query-field/MonacoQueryFieldLazy';
+import { MonacoQueryFieldWrapper } from './monaco-query-field/MonacoQueryFieldWrapper';
 
 export const RECORDING_RULES_GROUP = '__recording_rules__';
+const LAST_USED_LABELS_KEY = 'grafana.datasources.prometheus.browser.labels';
 
 function getChooserText(metricsLookupDisabled: boolean, hasSyntax: boolean, hasMetrics: boolean) {
   if (metricsLookupDisabled) {
@@ -71,7 +74,6 @@ export function willApplySuggestion(suggestion: string, { typeaheadContext, type
 
 interface PromQueryFieldProps extends QueryEditorProps<PrometheusDatasource, PromQuery, PromOptions> {
   ExtraFieldElement?: ReactNode;
-  placeholder?: string;
   'data-testid'?: string;
 }
 
@@ -176,7 +178,9 @@ class PromQueryField extends React.PureComponent<PromQueryFieldProps, PromQueryF
       await Promise.all(remainingTasks);
       this.onUpdateLanguage();
     } catch (err) {
-      if (!err.isCanceled) {
+      if (isCancelablePromiseRejection(err) && err.isCanceled) {
+        // do nothing, promise was canceled
+      } else {
         throw err;
       }
     }
@@ -220,8 +224,9 @@ class PromQueryField extends React.PureComponent<PromQueryFieldProps, PromQueryF
   onClickHintFix = () => {
     const { datasource, query, onChange, onRunQuery } = this.props;
     const { hint } = this.state;
-
-    onChange(datasource.modifyQuery(query, hint!.fix!.action));
+    if (hint?.fix?.action) {
+      onChange(datasource.modifyQuery(query, hint.fix.action));
+    }
     onRunQuery();
   };
 
@@ -264,79 +269,72 @@ class PromQueryField extends React.PureComponent<PromQueryFieldProps, PromQueryF
       datasource: { languageProvider },
       query,
       ExtraFieldElement,
-      placeholder = 'Enter a PromQL query (run with Shift+Enter)',
       history = [],
     } = this.props;
 
     const { labelBrowserVisible, syntaxLoaded, hint } = this.state;
-    const cleanText = languageProvider ? languageProvider.cleanText : undefined;
     const hasMetrics = languageProvider.metrics.length > 0;
     const chooserText = getChooserText(datasource.lookupsDisabled, syntaxLoaded, hasMetrics);
     const buttonDisabled = !(syntaxLoaded && hasMetrics);
 
-    const isMonacoEditorEnabled = config.featureToggles.prometheusMonaco;
-
     return (
-      <>
-        <div
-          className="gf-form-inline gf-form-inline--xs-view-flex-column flex-grow-1"
-          data-testid={this.props['data-testid']}
-        >
-          <button
-            className="gf-form-label query-keyword pointer"
-            onClick={this.onClickChooserButton}
-            disabled={buttonDisabled}
-          >
-            {chooserText}
-            <Icon name={labelBrowserVisible ? 'angle-down' : 'angle-right'} />
-          </button>
+      <LocalStorageValueProvider<string[]> storageKey={LAST_USED_LABELS_KEY} defaultValue={[]}>
+        {(lastUsedLabels, onLastUsedLabelsSave, onLastUsedLabelsDelete) => {
+          return (
+            <>
+              <div
+                className="gf-form-inline gf-form-inline--xs-view-flex-column flex-grow-1"
+                data-testid={this.props['data-testid']}
+              >
+                <button
+                  className="gf-form-label query-keyword pointer"
+                  onClick={this.onClickChooserButton}
+                  disabled={buttonDisabled}
+                >
+                  {chooserText}
+                  <Icon name={labelBrowserVisible ? 'angle-down' : 'angle-right'} />
+                </button>
 
-          <div className="gf-form gf-form--grow flex-shrink-1 min-width-15">
-            {isMonacoEditorEnabled ? (
-              <MonacoQueryFieldLazy
-                languageProvider={languageProvider}
-                history={history}
-                onChange={this.onChangeQuery}
-                onRunQuery={this.props.onRunQuery}
-                initialValue={query.expr ?? ''}
-              />
-            ) : (
-              <QueryField
-                additionalPlugins={this.plugins}
-                cleanText={cleanText}
-                query={query.expr}
-                onTypeahead={this.onTypeahead}
-                onWillApplySuggestion={willApplySuggestion}
-                onBlur={this.props.onBlur}
-                onChange={this.onChangeQuery}
-                onRunQuery={this.props.onRunQuery}
-                placeholder={placeholder}
-                portalOrigin="prometheus"
-                syntaxLoaded={syntaxLoaded}
-              />
-            )}
-          </div>
-        </div>
-        {labelBrowserVisible && (
-          <div className="gf-form">
-            <PrometheusMetricsBrowser languageProvider={languageProvider} onChange={this.onChangeLabelBrowser} />
-          </div>
-        )}
+                <div className="gf-form gf-form--grow flex-shrink-1 min-width-15">
+                  <MonacoQueryFieldWrapper
+                    runQueryOnBlur={this.props.app !== CoreApp.Explore}
+                    languageProvider={languageProvider}
+                    history={history}
+                    onChange={this.onChangeQuery}
+                    onRunQuery={this.props.onRunQuery}
+                    initialValue={query.expr ?? ''}
+                  />
+                </div>
+              </div>
+              {labelBrowserVisible && (
+                <div className="gf-form">
+                  <PrometheusMetricsBrowser
+                    languageProvider={languageProvider}
+                    onChange={this.onChangeLabelBrowser}
+                    lastUsedLabels={lastUsedLabels || []}
+                    storeLastUsedLabels={onLastUsedLabelsSave}
+                    deleteLastUsedLabels={onLastUsedLabelsDelete}
+                  />
+                </div>
+              )}
 
-        {ExtraFieldElement}
-        {hint ? (
-          <div className="query-row-break">
-            <div className="prom-query-field-info text-warning">
-              {hint.label}{' '}
-              {hint.fix ? (
-                <a className="text-link muted" onClick={this.onClickHintFix}>
-                  {hint.fix.label}
-                </a>
+              {ExtraFieldElement}
+              {hint ? (
+                <div className="query-row-break">
+                  <div className="prom-query-field-info text-warning">
+                    {hint.label}{' '}
+                    {hint.fix ? (
+                      <a className="text-link muted" onClick={this.onClickHintFix}>
+                        {hint.fix.label}
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
               ) : null}
-            </div>
-          </div>
-        ) : null}
-      </>
+            </>
+          );
+        }}
+      </LocalStorageValueProvider>
     );
   }
 }

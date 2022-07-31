@@ -1,14 +1,45 @@
 import { each, map } from 'lodash';
+
+import { DataLinkBuiltInVars, MappingType } from '@grafana/data';
+import { setDataSourceSrv } from '@grafana/runtime';
+import { config } from 'app/core/config';
+import { GRID_CELL_HEIGHT, GRID_CELL_VMARGIN } from 'app/core/constants';
+import { mockDataSource, MockDataSourceSrv } from 'app/features/alerting/unified/mocks';
+import { getPanelPlugin } from 'app/features/plugins/__mocks__/pluginMocks';
+import { MIXED_DATASOURCE_NAME } from 'app/plugins/datasource/mixed/MixedDataSource';
+
+import { VariableHide } from '../../variables/types';
 import { DashboardModel } from '../state/DashboardModel';
 import { PanelModel } from '../state/PanelModel';
-import { GRID_CELL_HEIGHT, GRID_CELL_VMARGIN } from 'app/core/constants';
-import { expect } from 'test/lib/common';
-import { DataLinkBuiltInVars, MappingType } from '@grafana/data';
-import { VariableHide } from '../../variables/types';
-import { config } from 'app/core/config';
-import { getPanelPlugin } from 'app/features/plugins/__mocks__/pluginMocks';
 
 jest.mock('app/core/services/context_srv', () => ({}));
+
+const dataSources = {
+  prom: mockDataSource({
+    name: 'prom',
+    uid: 'prom-uid',
+    type: 'prometheus',
+  }),
+  prom2: mockDataSource({
+    name: 'prom2',
+    uid: 'prom2-uid',
+    type: 'prometheus',
+    isDefault: true,
+  }),
+  notDefault: mockDataSource({
+    name: 'prom-not-default',
+    uid: 'prom-not-default-uid',
+    type: 'prometheus',
+    isDefault: false,
+  }),
+  [MIXED_DATASOURCE_NAME]: mockDataSource({
+    name: MIXED_DATASOURCE_NAME,
+    type: 'mixed',
+    uid: MIXED_DATASOURCE_NAME,
+  }),
+};
+
+setDataSourceSrv(new MockDataSourceSrv(dataSources));
 
 describe('DashboardModel', () => {
   describe('when creating dashboard with old schema', () => {
@@ -162,7 +193,7 @@ describe('DashboardModel', () => {
     });
 
     it('dashboard schema version should be set to latest', () => {
-      expect(model.schemaVersion).toBe(31);
+      expect(model.schemaVersion).toBe(37);
     });
 
     it('graph thresholds should be migrated', () => {
@@ -1417,7 +1448,7 @@ describe('DashboardModel', () => {
     });
 
     it('should ignore fieldConfig.defaults', () => {
-      expect(model.panels[0].panels[0].fieldConfig.defaults).toEqual(undefined);
+      expect(model.panels[0].panels?.[0].fieldConfig.defaults).toEqual(undefined);
     });
   });
 
@@ -1560,6 +1591,504 @@ describe('DashboardModel', () => {
       expect(panelTargets[2].refId).toBe('C');
       expect(panelTargets[3].refId).toBe('D');
     });
+
+    describe('with nested panels', () => {
+      let panel1Targets: any;
+      let panel2Targets: any;
+      let nestedModel: DashboardModel;
+
+      beforeEach(() => {
+        nestedModel = new DashboardModel({
+          annotations: {
+            list: [
+              {
+                actionPrefix: '',
+                alarmNamePrefix: '',
+                alias: '',
+                dimensions: {
+                  InstanceId: 'i-123',
+                },
+                enable: true,
+                expression: '',
+                iconColor: 'red',
+                id: '',
+                matchExact: true,
+                metricName: 'CPUUtilization',
+                name: 'test',
+                namespace: 'AWS/EC2',
+                period: '',
+                prefixMatching: false,
+                region: 'us-east-2',
+                statistics: ['Minimum', 'Sum'],
+              },
+            ],
+          },
+          panels: [
+            {
+              collapsed: false,
+              gridPos: {
+                h: 1,
+                w: 24,
+                x: 0,
+                y: 89,
+              },
+              id: 96,
+              title: 'DynamoDB',
+              type: 'row',
+              panels: [
+                {
+                  gridPos: {
+                    h: 8,
+                    w: 12,
+                    x: 0,
+                    y: 0,
+                  },
+                  id: 4,
+                  options: {
+                    legend: {
+                      calcs: [],
+                      displayMode: 'list',
+                      placement: 'bottom',
+                    },
+                    tooltipOptions: {
+                      mode: 'single',
+                    },
+                  },
+                  targets: [
+                    {
+                      alias: '',
+                      dimensions: {
+                        InstanceId: 'i-123',
+                      },
+                      expression: '',
+                      id: '',
+                      matchExact: true,
+                      metricName: 'CPUUtilization',
+                      namespace: 'AWS/EC2',
+                      period: '',
+                      refId: 'C',
+                      region: 'default',
+                      statistics: ['Average', 'Minimum', 'p12.21'],
+                    },
+                    {
+                      alias: '',
+                      dimensions: {
+                        InstanceId: 'i-123',
+                      },
+                      expression: '',
+                      hide: false,
+                      id: '',
+                      matchExact: true,
+                      metricName: 'CPUUtilization',
+                      namespace: 'AWS/EC2',
+                      period: '',
+                      refId: 'B',
+                      region: 'us-east-2',
+                      statistics: ['Sum'],
+                    },
+                  ],
+                  title: 'Panel Title',
+                  type: 'timeseries',
+                },
+                {
+                  gridPos: {
+                    h: 8,
+                    w: 12,
+                    x: 0,
+                    y: 0,
+                  },
+                  id: 4,
+                  options: {
+                    legend: {
+                      calcs: [],
+                      displayMode: 'list',
+                      placement: 'bottom',
+                    },
+                    tooltipOptions: {
+                      mode: 'single',
+                    },
+                  },
+                  targets: [
+                    {
+                      alias: '',
+                      dimensions: {
+                        InstanceId: 'i-123',
+                      },
+                      expression: '',
+                      id: '',
+                      matchExact: true,
+                      metricName: 'CPUUtilization',
+                      namespace: 'AWS/EC2',
+                      period: '',
+                      refId: 'A',
+                      region: 'default',
+                      statistics: ['Average'],
+                    },
+                    {
+                      alias: '',
+                      dimensions: {
+                        InstanceId: 'i-123',
+                      },
+                      expression: '',
+                      hide: false,
+                      id: '',
+                      matchExact: true,
+                      metricName: 'CPUUtilization',
+                      namespace: 'AWS/EC2',
+                      period: '',
+                      refId: 'B',
+                      region: 'us-east-2',
+                      statistics: ['Sum', 'Min'],
+                    },
+                  ],
+                  title: 'Panel Title',
+                  type: 'timeseries',
+                },
+              ],
+            },
+          ],
+        });
+        panel1Targets = nestedModel.panels[0].panels?.[0].targets;
+        panel2Targets = nestedModel.panels[0].panels?.[1].targets;
+      });
+
+      it('multiple stats query should have been split into one query per stat', () => {
+        expect(panel1Targets.length).toBe(4);
+        expect(panel2Targets.length).toBe(3);
+      });
+
+      it('new stats query should get the right statistic', () => {
+        expect(panel1Targets[0].statistic).toBe('Average');
+        expect(panel1Targets[1].statistic).toBe('Sum');
+        expect(panel1Targets[2].statistic).toBe('Minimum');
+        expect(panel1Targets[3].statistic).toBe('p12.21');
+
+        expect(panel2Targets[0].statistic).toBe('Average');
+        expect(panel2Targets[1].statistic).toBe('Sum');
+        expect(panel2Targets[2].statistic).toBe('Min');
+      });
+
+      it('new stats queries should be put in the end of the array', () => {
+        expect(panel1Targets[0].refId).toBe('C');
+        expect(panel1Targets[1].refId).toBe('B');
+        expect(panel1Targets[2].refId).toBe('A');
+        expect(panel1Targets[3].refId).toBe('D');
+
+        expect(panel2Targets[0].refId).toBe('A');
+        expect(panel2Targets[1].refId).toBe('B');
+        expect(panel2Targets[2].refId).toBe('C');
+      });
+    });
+  });
+
+  describe('when migrating datasource to refs', () => {
+    let model: DashboardModel;
+
+    beforeEach(() => {
+      model = new DashboardModel({
+        templating: {
+          list: [
+            {
+              type: 'query',
+              name: 'var',
+              options: [{ text: 'A', value: 'A' }],
+              refresh: 0,
+              datasource: 'prom',
+            },
+          ],
+        },
+        panels: [
+          {
+            id: 1,
+            datasource: 'prom',
+          },
+          {
+            id: 2,
+            datasource: null,
+          },
+          {
+            id: 3,
+            datasource: MIXED_DATASOURCE_NAME,
+            targets: [
+              {
+                datasource: 'prom',
+              },
+            ],
+          },
+          {
+            type: 'row',
+            id: 5,
+            panels: [
+              {
+                id: 6,
+                datasource: 'prom',
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    it('should not update variable datasource props to refs', () => {
+      expect(model.templating.list[0].datasource).toEqual('prom');
+    });
+
+    it('should update panel datasource props to refs for named data source', () => {
+      expect(model.panels[0].datasource).toEqual({ type: 'prometheus', uid: 'prom-uid' });
+    });
+
+    it('should update panel datasource props to refs for default data source', () => {
+      expect(model.panels[1].datasource).toEqual({ type: 'prometheus', uid: 'prom2-uid' });
+    });
+
+    it('should update panel datasource props to refs for mixed data source', () => {
+      expect(model.panels[2].datasource).toEqual({ type: 'mixed', uid: MIXED_DATASOURCE_NAME });
+    });
+
+    it('should update target datasource props to refs', () => {
+      expect(model.panels[2].targets[0].datasource).toEqual({ type: 'prometheus', uid: 'prom-uid' });
+    });
+
+    it('should update datasources in panels collapsed rows', () => {
+      expect(model.panels[3].panels?.[0].datasource).toEqual({ type: 'prometheus', uid: 'prom-uid' });
+    });
+  });
+
+  describe('when fixing query and panel data source refs out of sync due to default data source change', () => {
+    let model: DashboardModel;
+
+    beforeEach(() => {
+      model = new DashboardModel({
+        templating: {
+          list: [],
+        },
+        panels: [
+          {
+            id: 2,
+            datasource: null,
+            targets: [
+              {
+                datasource: 'prom-not-default',
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    it('should use data source on query level as source of truth', () => {
+      expect(model.panels[0].targets[0]?.datasource?.uid).toEqual('prom-not-default-uid');
+      expect(model.panels[0].datasource?.uid).toEqual('prom-not-default-uid');
+    });
+  });
+
+  describe('when migrating time series axis visibility', () => {
+    test('preserves x axis visibility', () => {
+      const model = new DashboardModel({
+        panels: [
+          {
+            type: 'timeseries',
+            fieldConfig: {
+              defaults: {
+                custom: {
+                  axisPlacement: 'hidden',
+                },
+              },
+              overrides: [],
+            },
+          },
+        ],
+      });
+
+      expect(model.panels[0].fieldConfig.overrides).toMatchInlineSnapshot(`
+        Array [
+          Object {
+            "matcher": Object {
+              "id": "byType",
+              "options": "time",
+            },
+            "properties": Array [
+              Object {
+                "id": "custom.axisPlacement",
+                "value": "auto",
+              },
+            ],
+          },
+        ]
+      `);
+    });
+  });
+
+  describe('when migrating default (null) datasource', () => {
+    let model: DashboardModel;
+
+    beforeEach(() => {
+      model = new DashboardModel({
+        templating: {
+          list: [
+            {
+              type: 'query',
+              name: 'var',
+              options: [{ text: 'A', value: 'A' }],
+              refresh: 0,
+              datasource: null,
+            },
+          ],
+        },
+        annotations: {
+          list: [
+            {
+              datasource: null,
+            },
+            {
+              datasource: 'prom',
+            },
+          ],
+        },
+        panels: [
+          {
+            id: 2,
+            datasource: null,
+            targets: [
+              {
+                datasource: null,
+              },
+            ],
+          },
+          {
+            id: 3,
+            targets: [
+              {
+                refId: 'A',
+              },
+            ],
+          },
+        ],
+        schemaVersion: 35,
+      });
+    });
+
+    it('should set data source to current default', () => {
+      expect(model.templating.list[0].datasource).toEqual({ type: 'prometheus', uid: 'prom2-uid' });
+    });
+
+    it('should migrate annotation null query to default ds', () => {
+      expect(model.annotations.list[1].datasource).toEqual({ type: 'prometheus', uid: 'prom2-uid' });
+    });
+
+    it('should migrate annotation query to refs', () => {
+      expect(model.annotations.list[2].datasource).toEqual({ type: 'prometheus', uid: 'prom-uid' });
+    });
+
+    it('should update panel datasource props to refs for named data source', () => {
+      expect(model.panels[0].datasource).toEqual({ type: 'prometheus', uid: 'prom2-uid' });
+    });
+
+    it('should update panel datasource props even when undefined', () => {
+      expect(model.panels[1].datasource).toEqual({ type: 'prometheus', uid: 'prom2-uid' });
+    });
+
+    it('should update target datasource props to refs', () => {
+      expect(model.panels[0].targets[0].datasource).toEqual({ type: 'prometheus', uid: 'prom2-uid' });
+    });
+  });
+
+  describe('when migrating default (null) datasource with panel with expressions queries', () => {
+    let model: DashboardModel;
+
+    beforeEach(() => {
+      model = new DashboardModel({
+        panels: [
+          {
+            id: 2,
+            targets: [
+              {
+                refId: 'A',
+              },
+              {
+                refId: 'B',
+                datasource: '__expr__',
+              },
+            ],
+          },
+        ],
+        schemaVersion: 30,
+      });
+    });
+
+    it('should update panel datasource props to default datasource', () => {
+      expect(model.panels[0].datasource).toEqual({ type: 'prometheus', uid: 'prom2-uid' });
+    });
+
+    it('should update target datasource props to default data source', () => {
+      expect(model.panels[0].targets[0].datasource).toEqual({ type: 'prometheus', uid: 'prom2-uid' });
+    });
+  });
+});
+
+describe('when generating the legend for a panel', () => {
+  let model: DashboardModel;
+
+  beforeEach(() => {
+    model = new DashboardModel({
+      panels: [
+        {
+          id: 0,
+          options: {
+            legend: {
+              displayMode: 'hidden',
+              placement: 'bottom',
+            },
+            tooltipOptions: {
+              mode: 'single',
+            },
+          },
+        },
+        {
+          id: 1,
+          options: {
+            legend: {
+              displayMode: 'list',
+              placement: 'right',
+            },
+            tooltipOptions: {
+              mode: 'single',
+            },
+          },
+        },
+        {
+          id: 2,
+          options: {
+            legend: {
+              displayMode: 'table',
+              placement: 'bottom',
+            },
+            tooltipOptions: {
+              mode: 'single',
+            },
+          },
+        },
+      ],
+      schemaVersion: 30,
+    });
+  });
+
+  it('should update displayMode = hidden to showLegend = false and displayMode = list', () => {
+    expect(model.panels[0].options.legend).toEqual({ displayMode: 'list', showLegend: false, placement: 'bottom' });
+  });
+
+  it('should keep displayMode = list and update to showLegend = true', () => {
+    expect(model.panels[1].options.legend).toEqual({ displayMode: 'list', showLegend: true, placement: 'right' });
+  });
+
+  it('should keep displayMode = table and update to showLegend = true', () => {
+    expect(model.panels[2].options.legend).toEqual({ displayMode: 'table', showLegend: true, placement: 'bottom' });
+  });
+
+  it('should preserve the placement', () => {
+    expect(model.panels[0].options.legend.placement).toEqual('bottom');
+    expect(model.panels[1].options.legend.placement).toEqual('right');
+    expect(model.panels[2].options.legend.placement).toEqual('bottom');
   });
 });
 

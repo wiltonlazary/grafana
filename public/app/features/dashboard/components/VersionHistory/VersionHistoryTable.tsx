@@ -1,14 +1,19 @@
-import React from 'react';
 import { css } from '@emotion/css';
+import React from 'react';
+
 import { Checkbox, Button, Tag, ModalsController } from '@grafana/ui';
+
 import { DecoratedRevisionModel } from '../DashboardSettings/VersionsSettings';
+
 import { RevertDashboardModal } from './RevertDashboardModal';
 
 type VersionsTableProps = {
   versions: DecoratedRevisionModel[];
+  canCompare: boolean;
   onCheck: (ev: React.FormEvent<HTMLInputElement>, versionId: number) => void;
 };
-export const VersionHistoryTable: React.FC<VersionsTableProps> = ({ versions, onCheck }) => (
+
+export const VersionHistoryTable = ({ versions, canCompare, onCheck }: VersionsTableProps) => (
   <table className="filter-table gf-form-group">
     <thead>
       <tr>
@@ -25,11 +30,13 @@ export const VersionHistoryTable: React.FC<VersionsTableProps> = ({ versions, on
         <tr key={version.id}>
           <td>
             <Checkbox
+              aria-label={`Toggle selection of version ${version.version}`}
               className={css`
                 display: inline;
               `}
               checked={version.checked}
               onChange={(ev) => onCheck(ev, version.id)}
+              disabled={!version.checked && canCompare}
             />
           </td>
           <td>{version.version}</td>

@@ -1,20 +1,22 @@
+import { set } from 'lodash';
+import { ComponentClass, ComponentType } from 'react';
+
+import { FieldConfigOptionsRegistry, StandardEditorContext } from '../field';
 import {
   FieldConfigSource,
   GrafanaPlugin,
   PanelEditorProps,
   PanelMigrationHandler,
-  PanelOptionEditorsRegistry,
   PanelPluginMeta,
   PanelProps,
   PanelTypeChangedHandler,
   FieldConfigProperty,
   PanelPluginDataSupport,
+  VisualizationSuggestionsSupplier,
 } from '../types';
-import { FieldConfigEditorBuilder, PanelOptionsEditorBuilder } from '../utils/OptionsUIBuilders';
-import { ComponentClass, ComponentType } from 'react';
-import { set } from 'lodash';
 import { deprecationWarning } from '../utils';
-import { FieldConfigOptionsRegistry } from '../field';
+import { FieldConfigEditorBuilder, PanelOptionsEditorBuilder } from '../utils/OptionsUIBuilders';
+
 import { createFieldConfigRegistry } from './registryFactories';
 
 /** @beta */
@@ -84,6 +86,11 @@ export interface SetFieldConfigOptionsArgs<TFieldConfigOptions = any> {
   useCustomConfig?: (builder: FieldConfigEditorBuilder<TFieldConfigOptions>) => void;
 }
 
+export type PanelOptionsSupplier<TOptions> = (
+  builder: PanelOptionsEditorBuilder<TOptions>,
+  context: StandardEditorContext<TOptions>
+) => void;
+
 export class PanelPlugin<
   TOptions = any,
   TFieldConfigOptions extends object = any
@@ -99,8 +106,8 @@ export class PanelPlugin<
     return new FieldConfigOptionsRegistry();
   };
 
-  private _optionEditors?: PanelOptionEditorsRegistry;
-  private registerOptionEditors?: (builder: PanelOptionsEditorBuilder<TOptions>) => void;
+  private optionsSupplier?: PanelOptionsSupplier<TOptions>;
+  private suggestionsSupplier?: VisualizationSuggestionsSupplier;
 
   panel: ComponentType<PanelProps<TOptions>> | null;
   editor?: ComponentClass<PanelEditorProps<TOptions>>;
@@ -125,15 +132,13 @@ export class PanelPlugin<
   get defaults() {
     let result = this._defaults || {};
 
-    if (!this._defaults) {
-      const editors = this.optionEditors;
-
-      if (!editors || editors.list().length === 0) {
-        return null;
-      }
-
-      for (const editor of editors.list()) {
-        set(result, editor.id, editor.defaultValue);
+    if (!this._defaults && this.optionsSupplier) {
+      const builder = new PanelOptionsEditorBuilder<TOptions>();
+      this.optionsSupplier(builder, { data: [] });
+      for (const item of builder.getItems()) {
+        if (item.defaultValue != null) {
+          set(result, item.path, item.defaultValue);
+        }
       }
     }
 
@@ -175,19 +180,6 @@ export class PanelPlugin<
     }
 
     return this._fieldConfigRegistry;
-  }
-
-  get optionEditors(): PanelOptionEditorsRegistry {
-    if (!this._optionEditors) {
-      const builder = new PanelOptionsEditorBuilder<TOptions>();
-      this._optionEditors = builder.getRegistry();
-
-      if (this.registerOptionEditors) {
-        this.registerOptionEditors(builder);
-      }
-    }
-
-    return this._optionEditors;
   }
 
   /**
@@ -258,10 +250,19 @@ export class PanelPlugin<
    *
    * @public
    **/
-  setPanelOptions(builder: (builder: PanelOptionsEditorBuilder<TOptions>) => void) {
+  setPanelOptions(builder: PanelOptionsSupplier<TOptions>) {
     // builder is applied lazily when options UI is created
-    this.registerOptionEditors = builder;
+    this.optionsSupplier = builder;
     return this;
+  }
+
+  /**
+   * This is used while building the panel options editor.
+   *
+   * @internal
+   */
+  getPanelOptionsSupplier(): PanelOptionsSupplier<TOptions> {
+    return this.optionsSupplier ?? ((() => {}) as PanelOptionsSupplier<TOptions>);
   }
 
   /**
@@ -356,5 +357,26 @@ export class PanelPlugin<
     this._initConfigRegistry = () => createFieldConfigRegistry(config, this.meta.name);
 
     return this;
+  }
+
+  /**
+   * Sets function that can return visualization examples and suggestions.
+   * @alpha
+   */
+  setSuggestionsSupplier(supplier: VisualizationSuggestionsSupplier) {
+    this.suggestionsSupplier = supplier;
+    return this;
+  }
+
+  /**
+   * Returns the suggestions supplier
+   * @alpha
+   */
+  getSuggestionsSupplier(): VisualizationSuggestionsSupplier | undefined {
+    return this.suggestionsSupplier;
+  }
+
+  hasPluginId(pluginId: string) {
+    return this.meta.id === pluginId;
   }
 }

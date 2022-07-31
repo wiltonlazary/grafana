@@ -1,10 +1,19 @@
-import { getValueMappingResult, isNumeric } from './valueMappings';
 import { ValueMapping, MappingType, SpecialValueMatch } from '../types';
+
+import { getValueMappingResult, isNumeric } from './valueMappings';
 
 const testSet1: ValueMapping[] = [
   {
     type: MappingType.ValueToText,
     options: { '11': { text: 'elva' } },
+  },
+  {
+    type: MappingType.ValueToText,
+    options: { Infinity: { text: 'wow infinity!' } },
+  },
+  {
+    type: MappingType.ValueToText,
+    options: { '-Infinity': { text: 'wow negative infinity!' } },
   },
   {
     type: MappingType.RangeToText,
@@ -52,6 +61,40 @@ const testSet1: ValueMapping[] = [
   },
 ];
 
+const testSet2: ValueMapping[] = [
+  {
+    type: MappingType.RegexToText,
+    options: {
+      pattern: '^([^.]*).foo.com$',
+      result: { text: 'Hostname $1' },
+    },
+  },
+  {
+    type: MappingType.RegexToText,
+    options: {
+      pattern: '^([^.]*).bar.com$',
+      result: { text: 'Hostname $1' },
+    },
+  },
+  {
+    type: MappingType.RegexToText,
+    options: {
+      pattern: '/hello/',
+      result: { color: 'red' },
+    },
+  },
+];
+
+const testSet3: ValueMapping[] = [
+  {
+    type: MappingType.RegexToText,
+    options: {
+      pattern: '/.*/s',
+      result: { text: 'WOW IT REPLACED EVERYTHING OVER MULTIPLE LINES' },
+    },
+  },
+];
+
 describe('Format value with value mappings', () => {
   it('should return null with no valuemappings', () => {
     const valueMappings: ValueMapping[] = [];
@@ -68,6 +111,16 @@ describe('Format value with value mappings', () => {
   it('should return match result with string value match', () => {
     const value = '11';
     expect(getValueMappingResult(testSet1, value)).toEqual({ text: 'elva' });
+  });
+
+  it('should return match result for Infinity', () => {
+    const value = Infinity;
+    expect(getValueMappingResult(testSet1, value)).toEqual({ text: 'wow infinity!' });
+  });
+
+  it('should return match result for -Infinity', () => {
+    const value = -Infinity;
+    expect(getValueMappingResult(testSet1, value)).toEqual({ text: 'wow negative infinity!' });
   });
 
   it('should return match result with number value', () => {
@@ -129,6 +182,33 @@ describe('Format value with value mappings', () => {
       },
     ];
     expect(getValueMappingResult(valueMappings, value)).toEqual(expected);
+  });
+});
+
+describe('Format value with regex mappings', () => {
+  it('should return correct regular expression result', () => {
+    const value = 'www.foo.com';
+    expect(getValueMappingResult(testSet2, value)).toEqual({ text: 'Hostname www' });
+  });
+
+  it('should return correct regular expression result on second regex', () => {
+    const value = 'ftp.bar.com';
+    expect(getValueMappingResult(testSet2, value)).toEqual({ text: 'Hostname ftp' });
+  });
+
+  it('should return null with unmatched value', () => {
+    const value = 'www.baz.com';
+    expect(getValueMappingResult(testSet2, value)).toBeNull();
+  });
+
+  it('should not replace match when replace text is null', () => {
+    expect(getValueMappingResult(testSet2, 'hello my name is')).toEqual({ color: 'red' });
+  });
+
+  it('supports replacing over multiple lines', () => {
+    expect(getValueMappingResult(testSet3, 'hello \n my name is')).toEqual({
+      text: 'WOW IT REPLACED EVERYTHING OVER MULTIPLE LINES',
+    });
   });
 });
 

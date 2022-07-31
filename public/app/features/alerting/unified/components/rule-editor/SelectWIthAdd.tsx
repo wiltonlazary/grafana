@@ -1,6 +1,7 @@
+import React, { FC, useEffect, useMemo, useState } from 'react';
+
 import { SelectableValue } from '@grafana/data';
 import { Input, Select } from '@grafana/ui';
-import React, { FC, useEffect, useMemo, useState } from 'react';
 
 interface Props {
   onChange: (value: string) => void;
@@ -13,6 +14,7 @@ interface Props {
   onCustomChange?: (custom: boolean) => void;
   width?: number;
   disabled?: boolean;
+  'aria-label'?: string;
 }
 
 export const SelectWithAdd: FC<Props> = ({
@@ -26,6 +28,7 @@ export const SelectWithAdd: FC<Props> = ({
   onCustomChange,
   disabled = false,
   addLabel = '+ Add new',
+  'aria-label': ariaLabel,
 }) => {
   const [isCustom, setIsCustom] = useState(custom);
 
@@ -35,14 +38,15 @@ export const SelectWithAdd: FC<Props> = ({
     }
   }, [custom]);
 
-  const _options = useMemo((): Array<SelectableValue<string>> => [...options, { value: '__add__', label: addLabel }], [
-    options,
-    addLabel,
-  ]);
+  const _options = useMemo(
+    (): Array<SelectableValue<string>> => [...options, { value: '__add__', label: addLabel }],
+    [options, addLabel]
+  );
 
   if (isCustom) {
     return (
       <Input
+        aria-label={ariaLabel}
         width={width}
         autoFocus={!custom}
         value={value || ''}
@@ -55,7 +59,7 @@ export const SelectWithAdd: FC<Props> = ({
   } else {
     return (
       <Select
-        menuShouldPortal
+        aria-label={ariaLabel}
         width={width}
         options={_options}
         value={value}

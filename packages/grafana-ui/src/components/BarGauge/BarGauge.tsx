@@ -1,25 +1,29 @@
 // Library
-import React, { PureComponent, CSSProperties, ReactNode } from 'react';
+import React, { CSSProperties, PureComponent, ReactNode } from 'react';
 import tinycolor from 'tinycolor2';
+
 import {
-  TimeSeriesValue,
-  DisplayValue,
-  formattedValueToString,
-  FormattedValue,
-  DisplayValueAlignmentFactors,
-  ThresholdsMode,
   DisplayProcessor,
-  FieldConfig,
-  FieldColorModeId,
-  getFieldColorMode,
+  DisplayValue,
+  DisplayValueAlignmentFactors,
   FALLBACK_COLOR,
-  TextDisplayOptions,
+  FieldColorModeId,
+  FieldConfig,
+  FormattedValue,
+  formattedValueToString,
+  GAUGE_DEFAULT_MAXIMUM,
+  GAUGE_DEFAULT_MINIMUM,
+  getFieldColorMode,
+  ThresholdsMode,
+  TimeSeriesValue,
   VizOrientation,
 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
-import { FormattedValueDisplay } from '../FormattedValueDisplay/FormattedValueDisplay';
-import { measureText, calculateFontSize } from '../../utils/measureText';
+import { VizTextDisplayOptions } from '@grafana/schema';
+
 import { Themeable2 } from '../../types';
+import { calculateFontSize, measureText } from '../../utils/measureText';
+import { FormattedValueDisplay } from '../FormattedValueDisplay/FormattedValueDisplay';
 
 const MIN_VALUE_HEIGHT = 18;
 const MAX_VALUE_HEIGHT = 50;
@@ -35,7 +39,7 @@ export interface Props extends Themeable2 {
   display?: DisplayProcessor;
   value: DisplayValue;
   orientation: VizOrientation;
-  text?: TextDisplayOptions;
+  text?: VizTextDisplayOptions;
   itemSpacing?: number;
   lcdCellWidth?: number;
   displayMode: BarGaugeDisplayMode;
@@ -112,7 +116,7 @@ export class BarGauge extends PureComponent<Props> {
     return (
       <div style={styles.wrapper}>
         <FormattedValueDisplay
-          aria-label={selectors.components.Panels.Visualization.BarGauge.value}
+          data-testid={selectors.components.Panels.Visualization.BarGauge.valueV2}
           value={value}
           style={styles.value}
         />
@@ -124,16 +128,10 @@ export class BarGauge extends PureComponent<Props> {
 
   renderRetroBars(): ReactNode {
     const { display, field, value, itemSpacing, alignmentFactors, orientation, lcdCellWidth, text } = this.props;
-    const {
-      valueHeight,
-      valueWidth,
-      maxBarHeight,
-      maxBarWidth,
-      wrapperWidth,
-      wrapperHeight,
-    } = calculateBarAndValueDimensions(this.props);
-    const minValue = field.min!;
-    const maxValue = field.max!;
+    const { valueHeight, valueWidth, maxBarHeight, maxBarWidth, wrapperWidth, wrapperHeight } =
+      calculateBarAndValueDimensions(this.props);
+    const minValue = field.min ?? GAUGE_DEFAULT_MINIMUM;
+    const maxValue = field.max ?? GAUGE_DEFAULT_MAXIMUM;
 
     const isVert = isVertical(orientation);
     const valueRange = maxValue - minValue;
@@ -193,7 +191,7 @@ export class BarGauge extends PureComponent<Props> {
       <div style={containerStyles}>
         {cells}
         <FormattedValueDisplay
-          aria-label={selectors.components.Panels.Visualization.BarGauge.value}
+          data-testid={selectors.components.Panels.Visualization.BarGauge.valueV2}
           value={value}
           style={valueStyles}
         />
@@ -266,10 +264,13 @@ function calculateTitleDimensions(props: Props): TitleDimensions {
   const titleFontSize = titleHeight / TITLE_LINE_HEIGHT;
   const textSize = measureText(title, titleFontSize);
 
+  // Do not allow title to take up more than 40% width
+  const textWidth = Math.min(textSize.width + 15, width * 0.4);
+
   return {
     fontSize: text?.titleSize ?? titleFontSize,
     height: 0,
-    width: textSize.width + 15,
+    width: textWidth,
     placement: 'left',
   };
 }
@@ -439,7 +440,9 @@ export function getBasicAndGradientStyles(props: Props): BasicAndGradientStyles 
   const { displayMode, field, value, alignmentFactors, orientation, theme, text } = props;
   const { valueWidth, valueHeight, maxBarHeight, maxBarWidth } = calculateBarAndValueDimensions(props);
 
-  const valuePercent = getValuePercent(value.numeric, field.min!, field.max!);
+  const minValue = field.min ?? GAUGE_DEFAULT_MINIMUM;
+  const maxValue = field.max ?? GAUGE_DEFAULT_MAXIMUM;
+  const valuePercent = getValuePercent(value.numeric, minValue, maxValue);
   const valueColor = getValueColor(props);
 
   const valueToBaseSizeOn = alignmentFactors ? alignmentFactors : value;
@@ -479,6 +482,9 @@ export function getBasicAndGradientStyles(props: Props): BasicAndGradientStyles 
     // adjust so that filled in bar is at the bottom
     emptyBar.bottom = '-3px';
 
+    //adjust empty region to always have same width as colored bar
+    emptyBar.width = `${valueWidth}px`;
+
     if (isBasic) {
       // Basic styles
       barStyles.background = `${tinycolor(valueColor).setAlpha(0.35).toRgbString()}`;
@@ -501,6 +507,9 @@ export function getBasicAndGradientStyles(props: Props): BasicAndGradientStyles 
 
     // shift empty region back to fill gaps due to border radius
     emptyBar.left = '-3px';
+
+    //adjust empty region to always have same height as colored bar
+    emptyBar.height = `${valueHeight}px`;
 
     if (isBasic) {
       // Basic styles
@@ -600,7 +609,7 @@ function getValueStyles(
   width: number,
   height: number,
   orientation: VizOrientation,
-  text?: TextDisplayOptions
+  text?: VizTextDisplayOptions
 ): CSSProperties {
   const styles: CSSProperties = {
     color,

@@ -1,6 +1,9 @@
+import { getPanelPlugin } from 'app/features/plugins/__mocks__/pluginMocks';
+
+import { setContextSrv } from '../../../../core/services/context_srv';
 import { DashboardModel } from '../../state/DashboardModel';
 import { PanelModel } from '../../state/PanelModel';
-import { setContextSrv } from '../../../../core/services/context_srv';
+
 import { hasChanges, ignoreChanges } from './DashboardPrompt';
 
 function getDefaultDashboardModel(): DashboardModel {
@@ -57,12 +60,6 @@ describe('DashboardPrompt', () => {
     expect(hasChanges(dash, original)).toBe(false);
   });
 
-  it('Should ignore .iteration changes', () => {
-    const { original, dash } = getTestContext();
-    dash.iteration = new Date().getTime() + 1;
-    expect(hasChanges(dash, original)).toBe(false);
-  });
-
   it('Should ignore row collapse change', () => {
     const { original, dash } = getTestContext();
     dash.toggleRow(dash.panels[1]);
@@ -93,7 +90,7 @@ describe('DashboardPrompt', () => {
     describe('when called without current dashboard', () => {
       it('then it should return true', () => {
         const { original } = getTestContext();
-        expect(ignoreChanges((null as unknown) as DashboardModel, original)).toBe(true);
+        expect(ignoreChanges(null as unknown as DashboardModel, original)).toBe(true);
       });
     });
 
@@ -135,6 +132,17 @@ describe('DashboardPrompt', () => {
           ignoreChanges({ ...dash, meta: { canSave: true, fromScript: true, fromFile: undefined } }, original)
         ).toBe(true);
       });
+    });
+
+    it('Should ignore panel schema migrations', () => {
+      const { original, dash } = getTestContext();
+      const plugin = getPanelPlugin({}).setMigrationHandler((panel) => {
+        delete (panel as any).legend;
+        return { option1: 'Aasd' };
+      });
+
+      dash.panels[0].pluginLoaded(plugin);
+      expect(hasChanges(dash, original)).toBe(false);
     });
 
     describe('when called with fromFile', () => {

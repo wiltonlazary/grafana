@@ -1,126 +1,169 @@
 package state
 
 import (
-	"errors"
+	"context"
+	"fmt"
+	"net/url"
 	"testing"
 
 	"github.com/grafana/grafana-plugin-sdk-go/data"
-	"github.com/grafana/grafana/pkg/services/ngalert/eval"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	ptr "github.com/xorcare/pointer"
+
+	"github.com/grafana/grafana/pkg/infra/log"
+	"github.com/grafana/grafana/pkg/services/ngalert/eval"
+	"github.com/grafana/grafana/pkg/services/ngalert/metrics"
+	"github.com/grafana/grafana/pkg/services/ngalert/models"
+	"github.com/grafana/grafana/pkg/util"
 )
 
-func TestTemplateCaptureValueStringer(t *testing.T) {
-	cases := []struct {
-		name     string
-		value    templateCaptureValue
-		expected string
-	}{{
-		name:     "0 is returned as integer value",
-		value:    templateCaptureValue{Value: 0},
-		expected: "0",
-	}, {
-		name:     "1.0 is returned as integer value",
-		value:    templateCaptureValue{Value: 1.0},
-		expected: "1",
-	}, {
-		name:     "1.1 is returned as decimal value",
-		value:    templateCaptureValue{Value: 1.1},
-		expected: "1.1",
-	}}
+func Test_getOrCreate(t *testing.T) {
+	c := newCache(log.New("test"), &metrics.State{}, &url.URL{
+		Scheme: "http",
+		Host:   "localhost:3000",
+		Path:   "/test",
+	})
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.expected, c.value.String())
-		})
-	}
+	generateRule := models.AlertRuleGen(models.WithNotEmptyLabels(5, "rule-"))
+
+	t.Run("should combine all labels", func(t *testing.T) {
+		rule := generateRule()
+
+		extraLabels := models.GenerateAlertLabels(5, "extra-")
+		result := eval.Result{
+			Instance: models.GenerateAlertLabels(5, "result-"),
+		}
+		state := c.getOrCreate(context.Background(), rule, result, extraLabels)
+		for key, expected := range extraLabels {
+			require.Equal(t, expected, state.Labels[key])
+		}
+		assert.Len(t, state.Labels, len(extraLabels)+len(rule.Labels)+len(result.Instance))
+		for key, expected := range extraLabels {
+			assert.Equal(t, expected, state.Labels[key])
+		}
+		for key, expected := range rule.Labels {
+			assert.Equal(t, expected, state.Labels[key])
+		}
+		for key, expected := range result.Instance {
+			assert.Equal(t, expected, state.Labels[key])
+		}
+	})
+	t.Run("extra labels should take precedence over rule and result labels", func(t *testing.T) {
+		rule := generateRule()
+
+		extraLabels := models.GenerateAlertLabels(2, "extra-")
+
+		result := eval.Result{
+			Instance: models.GenerateAlertLabels(5, "result-"),
+		}
+		for key := range extraLabels {
+			rule.Labels[key] = "rule-" + util.GenerateShortUID()
+			result.Instance[key] = "result-" + util.GenerateShortUID()
+		}
+
+		state := c.getOrCreate(context.Background(), rule, result, extraLabels)
+		for key, expected := range extraLabels {
+			require.Equal(t, expected, state.Labels[key])
+		}
+	})
+	t.Run("rule labels should take precedence over result labels", func(t *testing.T) {
+		rule := generateRule()
+
+		extraLabels := models.GenerateAlertLabels(2, "extra-")
+
+		result := eval.Result{
+			Instance: models.GenerateAlertLabels(5, "result-"),
+		}
+		for key := range rule.Labels {
+			result.Instance[key] = "result-" + util.GenerateShortUID()
+		}
+		state := c.getOrCreate(context.Background(), rule, result, extraLabels)
+		for key, expected := range rule.Labels {
+			require.Equal(t, expected, state.Labels[key])
+		}
+	})
+	t.Run("rule labels should be able to be expanded with result and extra labels", func(t *testing.T) {
+		result := eval.Result{
+			Instance: models.GenerateAlertLabels(5, "result-"),
+		}
+		rule := generateRule()
+
+		extraLabels := models.GenerateAlertLabels(2, "extra-")
+
+		labelTemplates := make(data.Labels)
+		for key := range extraLabels {
+			labelTemplates["rule-"+key] = fmt.Sprintf("{{ with (index .Labels \"%s\") }}{{.}}{{end}}", key)
+		}
+		for key := range result.Instance {
+			labelTemplates["rule-"+key] = fmt.Sprintf("{{ with (index .Labels \"%s\") }}{{.}}{{end}}", key)
+		}
+		rule.Labels = labelTemplates
+
+		state := c.getOrCreate(context.Background(), rule, result, extraLabels)
+		for key, expected := range extraLabels {
+			assert.Equal(t, expected, state.Labels["rule-"+key])
+		}
+		for key, expected := range result.Instance {
+			assert.Equal(t, expected, state.Labels["rule-"+key])
+		}
+	})
+	t.Run("rule annotations should be able to be expanded with result and extra labels", func(t *testing.T) {
+		result := eval.Result{
+			Instance: models.GenerateAlertLabels(5, "result-"),
+		}
+
+		rule := generateRule()
+
+		extraLabels := models.GenerateAlertLabels(2, "extra-")
+
+		annotationTemplates := make(data.Labels)
+		for key := range extraLabels {
+			annotationTemplates["rule-"+key] = fmt.Sprintf("{{ with (index .Labels \"%s\") }}{{.}}{{end}}", key)
+		}
+		for key := range result.Instance {
+			annotationTemplates["rule-"+key] = fmt.Sprintf("{{ with (index .Labels \"%s\") }}{{.}}{{end}}", key)
+		}
+		rule.Annotations = annotationTemplates
+
+		state := c.getOrCreate(context.Background(), rule, result, extraLabels)
+		for key, expected := range extraLabels {
+			assert.Equal(t, expected, state.Annotations["rule-"+key])
+		}
+		for key, expected := range result.Instance {
+			assert.Equal(t, expected, state.Annotations["rule-"+key])
+		}
+	})
 }
 
-func TestExpandTemplate(t *testing.T) {
-	cases := []struct {
-		name          string
-		text          string
-		alertInstance eval.Result
-		labels        data.Labels
-		expected      string
-		expectedError error
-	}{{
-		name:     "labels are expanded into $labels",
-		text:     "{{ $labels.instance }} is down",
-		labels:   data.Labels{"instance": "foo"},
-		expected: "foo is down",
-	}, {
-		name:          "missing label in $labels returns error",
-		text:          "{{ $labels.instance }} is down",
-		labels:        data.Labels{},
-		expectedError: errors.New("error executing template __alert_test: template: __alert_test:1:86: executing \"__alert_test\" at <$labels.instance>: map has no entry for key \"instance\""),
-	}, {
-		name: "values are expanded into $values",
-		text: "{{ $values.A.Labels.instance }} has value {{ $values.A }}",
-		alertInstance: eval.Result{
-			Values: map[string]eval.NumberValueCapture{
-				"A": {
-					Var:    "A",
-					Labels: data.Labels{"instance": "foo"},
-					Value:  ptr.Float64(1),
-				},
-			},
-		},
-		expected: "foo has value 1",
-	}, {
-		name: "values can be passed to template functions such as printf",
-		text: "{{ $values.A.Labels.instance }} has value {{ $values.A.Value | printf \"%.1f\" }}",
-		alertInstance: eval.Result{
-			Values: map[string]eval.NumberValueCapture{
-				"A": {
-					Var:    "A",
-					Labels: data.Labels{"instance": "foo"},
-					Value:  ptr.Float64(1.1),
-				},
-			},
-		},
-		expected: "foo has value 1.1",
-	}, {
-		name: "missing label in $values returns error",
-		text: "{{ $values.A.Labels.instance }} has value {{ $values.A }}",
-		alertInstance: eval.Result{
-			Values: map[string]eval.NumberValueCapture{
-				"A": {
-					Var:    "A",
-					Labels: data.Labels{},
-					Value:  ptr.Float64(1),
-				},
-			},
-		},
-		expectedError: errors.New("error executing template __alert_test: template: __alert_test:1:86: executing \"__alert_test\" at <$values.A.Labels.instance>: map has no entry for key \"instance\""),
-	}, {
-		name: "missing value in $values is returned as NaN",
-		text: "{{ $values.A.Labels.instance }} has value {{ $values.A }}",
-		alertInstance: eval.Result{
-			Values: map[string]eval.NumberValueCapture{
-				"A": {
-					Var:    "A",
-					Labels: data.Labels{"instance": "foo"},
-					Value:  nil,
-				},
-			},
-		},
-		expected: "foo has value NaN",
-	}, {
-		name: "assert value string is expanded into $value",
-		text: "{{ $value }}",
-		alertInstance: eval.Result{
-			EvaluationString: "[ var='A' labels={instance=foo} value=10 ]",
-		},
-		expected: "[ var='A' labels={instance=foo} value=10 ]",
-	}}
+func Test_mergeLabels(t *testing.T) {
+	t.Run("merges two maps", func(t *testing.T) {
+		a := models.GenerateAlertLabels(5, "set1-")
+		b := models.GenerateAlertLabels(5, "set2-")
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			v, err := expandTemplate("test", c.text, c.labels, c.alertInstance)
-			require.Equal(t, c.expectedError, err)
-			require.Equal(t, c.expected, v)
-		})
-	}
+		result := mergeLabels(a, b)
+		require.Len(t, result, len(a)+len(b))
+		for key, val := range a {
+			require.Equal(t, val, result[key])
+		}
+		for key, val := range b {
+			require.Equal(t, val, result[key])
+		}
+	})
+	t.Run("first set take precedence if conflict", func(t *testing.T) {
+		a := models.GenerateAlertLabels(5, "set1-")
+		b := models.GenerateAlertLabels(5, "set2-")
+		c := b.Copy()
+		for key, val := range a {
+			c[key] = "set2-" + val
+		}
+
+		result := mergeLabels(a, c)
+		require.Len(t, result, len(a)+len(b))
+		for key, val := range a {
+			require.Equal(t, val, result[key])
+		}
+		for key, val := range b {
+			require.Equal(t, val, result[key])
+		}
+	})
 }

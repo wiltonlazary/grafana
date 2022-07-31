@@ -1,9 +1,12 @@
-import React, { ReactNode } from 'react';
 import { css } from '@emotion/css';
+import React, { ReactNode } from 'react';
+
 import { TimeOption } from '@grafana/data';
+
+import { stylesFactory } from '../../../themes';
+
 import { TimePickerTitle } from './TimePickerTitle';
 import { TimeRangeOption } from './TimeRangeOption';
-import { stylesFactory } from '../../../themes';
 
 const getStyles = stylesFactory(() => {
   return {
@@ -26,7 +29,7 @@ const getOptionsStyles = stylesFactory(() => {
 });
 
 interface Props {
-  title: string;
+  title?: string;
   options: TimeOption[];
   value?: TimeOption;
   onChange: (option: TimeOption) => void;
@@ -69,7 +72,7 @@ const Options: React.FC<Props> = ({ options, value, onChange, title }) => {
             value={option}
             selected={isEqual(option, value)}
             onSelect={onChange}
-            name={title}
+            name={title ?? 'Time ranges'}
           />
         ))}
       </ul>

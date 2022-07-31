@@ -1,14 +1,15 @@
 import { MetricsConfiguration } from '../../../types';
+
+import {
+  defaultPipelineVariable,
+  generatePipelineVariableName,
+} from './SettingsEditor/BucketScriptSettingsEditor/utils';
 import {
   isMetricAggregationWithField,
   isPipelineAggregationWithMultipleBucketPaths,
   MetricAggregation,
   PipelineMetricAggregationType,
 } from './aggregations';
-import {
-  defaultPipelineVariable,
-  generatePipelineVariableName,
-} from './SettingsEditor/BucketScriptSettingsEditor/utils';
 
 export const metricAggregationConfig: MetricsConfiguration = {
   count: {
@@ -112,7 +113,7 @@ export const metricAggregationConfig: MetricsConfiguration = {
     label: 'Moving Average',
     requiresField: true,
     isPipelineAgg: true,
-    versionRange: '>=2.0.0',
+    versionRange: '>=2.0.0 <8.0.0',
     supportsMissing: false,
     supportsMultipleBucketPaths: false,
     hasSettings: true,

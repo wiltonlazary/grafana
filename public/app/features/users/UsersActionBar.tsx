@@ -1,11 +1,14 @@
 import React, { PureComponent } from 'react';
 import { connect } from 'react-redux';
-import { setUsersSearchQuery } from './state/reducers';
-import { getInviteesCount, getUsersSearchQuery } from './state/selectors';
-import { FilterInput } from 'app/core/components/FilterInput/FilterInput';
-import { RadioButtonGroup, LinkButton } from '@grafana/ui';
+
+import { RadioButtonGroup, LinkButton, FilterInput } from '@grafana/ui';
 import { contextSrv } from 'app/core/core';
-import { AccessControlAction } from 'app/types';
+import { AccessControlAction, StoreState } from 'app/types';
+
+import { selectTotal } from '../invites/state/selectors';
+
+import { setUsersSearchQuery } from './state/reducers';
+import { getUsersSearchQuery } from './state/selectors';
 
 export interface Props {
   searchQuery: string;
@@ -34,10 +37,10 @@ export class UsersActionBar extends PureComponent<Props> {
       { label: 'Users', value: 'users' },
       { label: `Pending Invites (${pendingInvitesCount})`, value: 'invites' },
     ];
-    const canAddToOrg = contextSrv.hasPermission(AccessControlAction.OrgUsersAdd);
+    const canAddToOrg: boolean = contextSrv.hasAccess(AccessControlAction.OrgUsersAdd, canInvite);
 
     return (
-      <div className="page-action-bar">
+      <div className="page-action-bar" data-testid="users-action-bar">
         <div className="gf-form gf-form--grow">
           <FilterInput
             value={searchQuery}
@@ -50,7 +53,7 @@ export class UsersActionBar extends PureComponent<Props> {
             <RadioButtonGroup value={showInvites ? 'invites' : 'users'} options={options} onChange={onShowInvites} />
           </div>
         )}
-        {canInvite && canAddToOrg && <LinkButton href="org/users/invite">Invite</LinkButton>}
+        {canAddToOrg && <LinkButton href="org/users/invite">Invite</LinkButton>}
         {externalUserMngLinkUrl && (
           <LinkButton href={externalUserMngLinkUrl} target="_blank" rel="noopener">
             {externalUserMngLinkName}
@@ -61,10 +64,10 @@ export class UsersActionBar extends PureComponent<Props> {
   }
 }
 
-function mapStateToProps(state: any) {
+function mapStateToProps(state: StoreState) {
   return {
     searchQuery: getUsersSearchQuery(state.users),
-    pendingInvitesCount: getInviteesCount(state.users),
+    pendingInvitesCount: selectTotal(state.invites),
     externalUserMngLinkName: state.users.externalUserMngLinkName,
     externalUserMngLinkUrl: state.users.externalUserMngLinkUrl,
     canInvite: state.users.canInvite,

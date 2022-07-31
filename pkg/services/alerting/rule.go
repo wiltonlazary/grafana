@@ -1,6 +1,7 @@
 package alerting
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -8,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/grafana/grafana/pkg/bus"
 	"github.com/grafana/grafana/pkg/components/simplejson"
 	"github.com/grafana/grafana/pkg/models"
 )
@@ -144,7 +144,7 @@ func getForValue(rawFor string) (time.Duration, error) {
 
 // NewRuleFromDBAlert maps a db version of
 // alert to an in-memory version.
-func NewRuleFromDBAlert(ruleDef *models.Alert, logTranslationFailures bool) (*Rule, error) {
+func NewRuleFromDBAlert(ctx context.Context, store AlertStore, ruleDef *models.Alert, logTranslationFailures bool) (*Rule, error) {
 	model := &Rule{}
 	model.ID = ruleDef.Id
 	model.OrgID = ruleDef.OrgId
@@ -169,7 +169,7 @@ func NewRuleFromDBAlert(ruleDef *models.Alert, logTranslationFailures bool) (*Ru
 	for _, v := range ruleDef.Settings.Get("notifications").MustArray() {
 		jsonModel := simplejson.NewFromAny(v)
 		if id, err := jsonModel.Get("id").Int64(); err == nil {
-			uid, err := translateNotificationIDToUID(id, ruleDef.OrgId)
+			uid, err := translateNotificationIDToUID(ctx, store, id, ruleDef.OrgId)
 			if err != nil {
 				if !errors.Is(err, models.ErrAlertNotificationFailedTranslateUniqueID) {
 					logger.Error("Failed to translate notification id to uid", "error", err.Error(), "dashboardId", model.DashboardID, "alert", model.Name, "panelId", model.PanelID, "notificationId", id)
@@ -210,8 +210,8 @@ func NewRuleFromDBAlert(ruleDef *models.Alert, logTranslationFailures bool) (*Ru
 	return model, nil
 }
 
-func translateNotificationIDToUID(id int64, orgID int64) (string, error) {
-	notificationUID, err := getAlertNotificationUIDByIDAndOrgID(id, orgID)
+func translateNotificationIDToUID(ctx context.Context, store AlertStore, id int64, orgID int64) (string, error) {
+	notificationUID, err := getAlertNotificationUIDByIDAndOrgID(ctx, store, id, orgID)
 	if err != nil {
 		return "", err
 	}
@@ -219,13 +219,13 @@ func translateNotificationIDToUID(id int64, orgID int64) (string, error) {
 	return notificationUID, nil
 }
 
-func getAlertNotificationUIDByIDAndOrgID(notificationID int64, orgID int64) (string, error) {
+func getAlertNotificationUIDByIDAndOrgID(ctx context.Context, store AlertStore, notificationID int64, orgID int64) (string, error) {
 	query := &models.GetAlertNotificationUidQuery{
 		OrgId: orgID,
 		Id:    notificationID,
 	}
 
-	if err := bus.Dispatch(query); err != nil {
+	if err := store.GetAlertNotificationUidWithId(ctx, query); err != nil {
 		return "", err
 	}
 

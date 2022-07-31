@@ -1,20 +1,32 @@
-import React from 'react';
 import { css } from '@emotion/css';
 import { sumBy } from 'lodash';
-import { Modal, ConfirmModal, Button } from '@grafana/ui';
-import { DashboardModel, PanelModel } from '../../state';
-import { useDashboardDelete } from './useDashboardDelete';
+import React from 'react';
+import { connect, ConnectedProps } from 'react-redux';
 import useAsyncFn from 'react-use/lib/useAsyncFn';
+
+import { Modal, ConfirmModal, Button } from '@grafana/ui';
 import { config } from 'app/core/config';
+import { DashboardModel, PanelModel } from 'app/features/dashboard/state';
+import { cleanUpDashboardAndVariables } from 'app/features/dashboard/state/actions';
+
+import { useDashboardDelete } from './useDashboardDelete';
 
 type DeleteDashboardModalProps = {
   hideModal(): void;
   dashboard: DashboardModel;
 };
 
-export const DeleteDashboardModal: React.FC<DeleteDashboardModalProps> = ({ hideModal, dashboard }) => {
+const mapDispatchToProps = {
+  cleanUpDashboardAndVariables,
+};
+
+const connector = connect(null, mapDispatchToProps);
+
+type Props = DeleteDashboardModalProps & ConnectedProps<typeof connector>;
+
+const DeleteDashboardModalUnconnected: React.FC<Props> = ({ hideModal, cleanUpDashboardAndVariables, dashboard }) => {
   const isProvisioned = dashboard.meta.provisioned;
-  const { onDeleteDashboard } = useDashboardDelete(dashboard.uid);
+  const { onDeleteDashboard } = useDashboardDelete(dashboard.uid, cleanUpDashboardAndVariables);
 
   const [, onConfirm] = useAsyncFn(async () => {
     await onDeleteDashboard();
@@ -42,7 +54,7 @@ export const DeleteDashboardModal: React.FC<DeleteDashboardModalProps> = ({ hide
 
 const getModalBody = (panels: PanelModel[], title: string) => {
   const totalAlerts = sumBy(panels, (panel) => (panel.alert ? 1 : 0));
-  return totalAlerts > 0 && !config.featureToggles.ngalert ? (
+  return totalAlerts > 0 && !config.unifiedAlertingEnabled ? (
     <>
       <p>Do you want to delete this dashboard?</p>
       <p>
@@ -95,3 +107,5 @@ const ProvisionedDeleteModal = ({ hideModal, provisionedId }: { hideModal(): voi
     </Modal.ButtonRow>
   </Modal>
 );
+
+export const DeleteDashboardModal = connector(DeleteDashboardModalUnconnected);

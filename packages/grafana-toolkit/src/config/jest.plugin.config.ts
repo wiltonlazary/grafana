@@ -1,5 +1,5 @@
-import path = require('path');
 import fs from 'fs';
+import path = require('path');
 
 export const allowedJestConfigOverrides = [
   'snapshotSerializers',
@@ -44,15 +44,17 @@ export const jestConfig = (baseDir: string = process.cwd()) => {
   const { moduleNameMapper, ...otherOverrides } = jestConfigOverrides;
   const moduleNameMapperConfig = {
     '\\.(css|sass|scss)$': `${__dirname}/styles.mock.js`,
+    'react-inlinesvg': `${__dirname}/react-inlinesvg.tsx`,
     ...moduleNameMapper,
   };
 
   const setupFile = getSetupFile(setupFilePath);
   const shimsFile = getSetupFile(shimsFilePath);
 
-  const setupFiles = [setupFile, shimsFile, `${__dirname}/matchMedia.js`, 'jest-canvas-mock'].filter((f) => f);
+  const setupFiles = [setupFile, shimsFile, `${__dirname}/matchMedia.js`, require.resolve('jest-canvas-mock')].filter(
+    (f) => f
+  );
   const defaultJestConfig = {
-    preset: 'ts-jest',
     verbose: false,
     moduleDirectories: ['node_modules', 'src'],
     moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
@@ -68,20 +70,21 @@ export const jestConfig = (baseDir: string = process.cwd()) => {
     reporters: [
       'default',
       [
-        'jest-junit',
+        require.resolve('jest-junit'),
         {
           outputDirectory: 'coverage',
         },
       ],
     ],
-    testEnvironment: 'jest-environment-jsdom-fifteen',
+    testEnvironment: 'jsdom',
     testMatch: [
       '<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}',
       '<rootDir>/src/**/*.{spec,test,jest}.{js,jsx,ts,tsx}',
       '<rootDir>/spec/**/*.{spec,test,jest}.{js,jsx,ts,tsx}',
     ],
     transform: {
-      '^.+\\.js$': 'babel-jest',
+      '^.+\\.jsx?$': require.resolve('babel-jest'),
+      '^.+\\.tsx?$': require.resolve('ts-jest'),
     },
     transformIgnorePatterns: [
       '[/\\\\\\\\]node_modules[/\\\\\\\\].+\\\\.(js|jsx|ts|tsx)$',
@@ -102,7 +105,8 @@ export const jestConfig = (baseDir: string = process.cwd()) => {
 export const loadJestPluginConfig = (baseDir: string = process.cwd()) => {
   const cfgpath = path.resolve(baseDir, 'jest.config.js');
   if (!fs.existsSync(cfgpath)) {
-    const src = path.resolve(baseDir, 'node_modules/@grafana/toolkit/src/config/jest.plugin.config.local.js');
+    const toolkitDir = path.dirname(require.resolve(`@grafana/toolkit/package.json`));
+    const src = path.join(toolkitDir, 'src/config/jest.plugin.config.local.js');
     fs.copyFileSync(src, cfgpath);
     console.log('Using standard jest plugin config', src);
   }

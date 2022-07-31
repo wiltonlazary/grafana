@@ -1,29 +1,32 @@
 import { map } from 'lodash';
-import LogAnalyticsQuerystringBuilder from '../log_analytics/querystring_builder';
-import ResponseParser, { transformMetadataToKustoSchema } from './response_parser';
-import {
-  AzureMonitorQuery,
-  AzureDataSourceJsonData,
-  AzureLogsVariable,
-  AzureQueryType,
-  DatasourceValidationResult,
-} from '../types';
+import { from, Observable } from 'rxjs';
+import { mergeMap } from 'rxjs/operators';
+
 import {
   DataQueryRequest,
   DataQueryResponse,
-  ScopedVars,
   DataSourceInstanceSettings,
-  MetricFindValue,
+  DataSourceRef,
+  ScopedVars,
 } from '@grafana/data';
-import { getTemplateSrv, DataSourceWithBackend } from '@grafana/runtime';
-import { Observable, from } from 'rxjs';
-import { mergeMap } from 'rxjs/operators';
-import { getAuthType, getAzureCloud, getAzurePortalUrl } from '../credentials';
+import { DataSourceWithBackend, getTemplateSrv } from '@grafana/runtime';
+
 import { isGUIDish } from '../components/ResourcePicker/utils';
+import { getAuthType, getAzureCloud, getAzurePortalUrl } from '../credentials';
+import LogAnalyticsQuerystringBuilder from '../log_analytics/querystring_builder';
+import {
+  AzureDataSourceJsonData,
+  AzureLogsVariable,
+  AzureMonitorQuery,
+  AzureQueryType,
+  DatasourceValidationResult,
+} from '../types';
 import { interpolateVariable, routeNames } from '../utils/common';
 
+import ResponseParser, { transformMetadataToKustoSchema } from './response_parser';
+
 interface AdhocQuery {
-  datasourceId: number;
+  datasource: DataSourceRef;
   path: string;
   resultFormat: string;
 }
@@ -57,6 +60,14 @@ export default class AzureLogAnalyticsDatasource extends DataSourceWithBackend<
   isConfigured(): boolean {
     // If validation didn't return any error then the data source is properly configured
     return !this.validateDatasource();
+  }
+
+  filterQuery(item: AzureMonitorQuery): boolean {
+    return (
+      item.hide !== true &&
+      !!item.azureLogAnalytics?.query &&
+      (!!item.azureLogAnalytics.resource || !!item.azureLogAnalytics.workspace)
+    );
   }
 
   async getSubscriptions(): Promise<Array<{ text: string; value: string }>> {
@@ -100,8 +111,10 @@ export default class AzureLogAnalyticsDatasource extends DataSourceWithBackend<
   }
 
   async getKustoSchema(resourceUri: string) {
-    const metadata = await this.getMetadata(resourceUri);
-    return transformMetadataToKustoSchema(metadata, resourceUri);
+    const templateSrv = getTemplateSrv();
+    const interpolatedUri = templateSrv.replace(resourceUri, {}, interpolateVariable);
+    const metadata = await this.getMetadata(interpolatedUri);
+    return transformMetadataToKustoSchema(metadata, interpolatedUri, templateSrv.getVariables());
   }
 
   applyTemplateVariables(target: AzureMonitorQuery, scopedVars: ScopedVars): AzureMonitorQuery {
@@ -121,7 +134,7 @@ export default class AzureLogAnalyticsDatasource extends DataSourceWithBackend<
     const query = templateSrv.replace(item.query, scopedVars, interpolateVariable);
 
     return {
-      refId: target.refId,
+      ...target,
       queryType: AzureQueryType.LogAnalytics,
 
       azureLogAnalytics: {
@@ -214,60 +227,12 @@ export default class AzureLogAnalyticsDatasource extends DataSourceWithBackend<
     };
   }
 
-  /**
-   * This is named differently than DataSourceApi.metricFindQuery
-   * because it's not exposed to Grafana like the main AzureMonitorDataSource.
-   * And some of the azure internal data sources return null in this function, which the
-   * external interface does not support
-   */
-  metricFindQueryInternal(query: string, optionalOptions?: unknown): Promise<MetricFindValue[]> {
-    // workspaces() - Get workspaces in the default subscription
-    const workspacesQuery = query.match(/^workspaces\(\)/i);
-    if (workspacesQuery) {
-      if (this.defaultSubscriptionId) {
-        return this.getWorkspaces(this.defaultSubscriptionId);
-      } else {
-        throw new Error(
-          'No subscription ID. Specify a default subscription ID in the data source config to use workspaces() without a subscription ID'
-        );
-      }
-    }
-
-    // workspaces("abc-def-etc") - Get workspaces a specified subscription
-    const workspacesQueryWithSub = query.match(/^workspaces\(["']?([^\)]+?)["']?\)/i);
-    if (workspacesQueryWithSub) {
-      return this.getWorkspaces((workspacesQueryWithSub[1] || '').trim());
-    }
-
-    // Execute the query as KQL to the default or first workspace
-    return this.getFirstWorkspace().then((resourceURI) => {
-      if (!resourceURI) {
-        return [];
-      }
-
-      const queries = this.buildQuery(query, optionalOptions, resourceURI);
-      const promises = this.doQueries(queries);
-
-      return Promise.all(promises)
-        .then((results) => {
-          return new ResponseParser(results).parseToVariables();
-        })
-        .catch((err) => {
-          if (
-            err.error &&
-            err.error.data &&
-            err.error.data.error &&
-            err.error.data.error.innererror &&
-            err.error.data.error.innererror.innererror
-          ) {
-            throw { message: err.error.data.error.innererror.innererror.message };
-          } else if (err.error && err.error.data && err.error.data.error) {
-            throw { message: err.error.data.error.message };
-          }
-
-          throw err;
-        });
-    }) as Promise<MetricFindValue[]>;
+  /*
+    In 7.5.x it used to be possible to set a default workspace id in the config on the auth page.
+    This has been deprecated, however is still used by a few legacy template queries.
+  */
+  getDeprecatedDefaultWorkSpace() {
+    return this.instanceSettings.jsonData.logAnalyticsDefaultWorkspace;
   }
 
   private buildQuery(query: string, options: any, workspace: string): AdhocQuery[] {
@@ -284,7 +249,7 @@ export default class AzureLogAnalyticsDatasource extends DataSourceWithBackend<
 
     const queries = [
       {
-        datasourceId: this.id,
+        datasource: this.getRef(),
         path: path,
         resultFormat: 'table',
       },
@@ -353,65 +318,6 @@ export default class AzureLogAnalyticsDatasource extends DataSourceWithBackend<
           };
         });
     });
-  }
-
-  async testDatasource(): Promise<DatasourceValidationResult> {
-    const validationError = this.validateDatasource();
-    if (validationError) {
-      return validationError;
-    }
-
-    let resourceOrWorkspace: string;
-    try {
-      const result = await this.getFirstWorkspace();
-      if (!result) {
-        return {
-          status: 'error',
-          message: 'Workspace not found.',
-        };
-      }
-      resourceOrWorkspace = result;
-    } catch (e) {
-      let message = 'Azure Log Analytics requires access to Azure Monitor but had the following error: ';
-      return {
-        status: 'error',
-        message: this.getErrorMessage(message, e),
-      };
-    }
-
-    try {
-      const path = isGUIDish(resourceOrWorkspace)
-        ? `${this.resourcePath}/v1/workspaces/${resourceOrWorkspace}/metadata`
-        : `${this.resourcePath}/v1${resourceOrWorkspace}/metadata`;
-
-      return await this.getResource(path).then<DatasourceValidationResult>((response: any) => {
-        return {
-          status: 'success',
-          message: 'Successfully queried the Azure Log Analytics service.',
-          title: 'Success',
-        };
-      });
-    } catch (e) {
-      let message = 'Azure Log Analytics: ';
-      return {
-        status: 'error',
-        message: this.getErrorMessage(message, e),
-      };
-    }
-  }
-
-  private getErrorMessage(message: string, error: any) {
-    message += error.statusText ? error.statusText + ': ' : '';
-    if (error.data && error.data.error && error.data.error.code) {
-      message += error.data.error.code + '. ' + error.data.error.message;
-    } else if (error.data && error.data.error) {
-      message += error.data.error;
-    } else if (error.data) {
-      message += error.data;
-    } else {
-      message += 'Cannot connect to Azure Log Analytics REST API.';
-    }
-    return message;
   }
 
   private validateDatasource(): DatasourceValidationResult | undefined {

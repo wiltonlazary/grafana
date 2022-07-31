@@ -2,34 +2,26 @@
 package instrumentation
 
 import (
-	"context"
 	"time"
 
-	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 var (
-	pluginRequestCounter  *prometheus.CounterVec
-	pluginRequestDuration *prometheus.SummaryVec
-)
-
-func init() {
-	pluginRequestCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	pluginRequestCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "grafana",
 		Name:      "plugin_request_total",
 		Help:      "The total amount of plugin requests",
 	}, []string{"plugin_id", "endpoint", "status"})
 
-	pluginRequestDuration = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace:  "grafana",
-		Name:       "plugin_request_duration_milliseconds",
-		Help:       "Plugin request duration",
-		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+	pluginRequestDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "grafana",
+		Name:      "plugin_request_duration_milliseconds",
+		Help:      "Plugin request duration",
+		Buckets:   []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 50, 100},
 	}, []string{"plugin_id", "endpoint"})
-
-	prometheus.MustRegister(pluginRequestCounter, pluginRequestDuration)
-}
+)
 
 // instrumentPluginRequest instruments success rate and latency of `fn`
 func instrumentPluginRequest(pluginID string, endpoint string, fn func() error) error {
@@ -67,20 +59,4 @@ func InstrumentCallResourceRequest(pluginID string, fn func() error) error {
 // InstrumentQueryDataRequest instruments success rate and latency of query data requests.
 func InstrumentQueryDataRequest(pluginID string, fn func() error) error {
 	return instrumentPluginRequest(pluginID, "queryData", fn)
-}
-
-// InstrumentQueryDataHandler wraps a backend.QueryDataHandler with instrumentation of success rate and latency.
-func InstrumentQueryDataHandler(handler backend.QueryDataHandler) backend.QueryDataHandler {
-	if handler == nil {
-		return nil
-	}
-
-	return backend.QueryDataHandlerFunc(func(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-		var resp *backend.QueryDataResponse
-		err := InstrumentQueryDataRequest(req.PluginContext.PluginID, func() (innerErr error) {
-			resp, innerErr = handler.QueryData(ctx, req)
-			return
-		})
-		return resp, err
-	})
 }

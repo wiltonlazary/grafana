@@ -1,7 +1,8 @@
 import React, { createRef } from 'react';
-import uPlot, { Options } from 'uplot';
-import { DEFAULT_PLOT_CONFIG, pluginLog } from './utils';
+import uPlot, { AlignedData, Options } from 'uplot';
+
 import { PlotProps } from './types';
+import { DEFAULT_PLOT_CONFIG, pluginLog } from './utils';
 
 function sameDims(prevProps: PlotProps, nextProps: PlotProps) {
   return nextProps.width === prevProps.width && nextProps.height === prevProps.height;
@@ -72,7 +73,7 @@ export class UPlotChart extends React.Component<PlotProps, UPlotChartState> {
     };
 
     pluginLog('UPlot', false, 'Reinitializing plot', config);
-    const plot = new uPlot(config, this.props.data, this.plotContainer!.current!);
+    const plot = new uPlot(config, this.props.data as AlignedData, this.plotContainer!.current!);
 
     if (plotRef) {
       plotRef(plot);
@@ -100,15 +101,7 @@ export class UPlotChart extends React.Component<PlotProps, UPlotChartState> {
     } else if (!sameConfig(prevProps, this.props)) {
       this.reinitPlot();
     } else if (!sameData(prevProps, this.props)) {
-      plot?.setData(this.props.data);
-
-      // this is a uPlot cache-busting hack for bar charts in case x axis labels changed
-      // since the x scale's "range" doesnt change, the axis size doesnt get recomputed, which is where the tick labels are regenerated & cached
-      // the more expensive, more proper/thorough way to do this is to force all axes to recalc: plot?.redraw(false, true);
-      if (plot && typeof this.props.data[0][0] === 'string') {
-        //@ts-ignore
-        plot.axes[0]._values = this.props.data[0];
-      }
+      plot?.setData(this.props.data as AlignedData);
     } else if (!sameTimeRange(prevProps, this.props)) {
       plot?.setScale('x', {
         min: this.props.timeRange.from.valueOf(),

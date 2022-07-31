@@ -1,44 +1,29 @@
-// @ts-ignore
 import chalk from 'chalk';
-import program from 'commander';
-import { promises as fs } from 'fs';
-import { execTask } from './utils/execTask';
-import { startTask } from './tasks/core.start';
+import { program } from 'commander';
+
 import { changelogTask } from './tasks/changelog';
 import { cherryPickTask } from './tasks/cherrypick';
-import { templateTask } from './tasks/template';
-import { pluginBuildTask } from './tasks/plugin.build';
-import { toolkitBuildTask } from './tasks/toolkit.build';
-import { pluginTestTask } from './tasks/plugin.tests';
-import { searchTestDataSetupTask } from './tasks/searchTestDataSetup';
 import { closeMilestoneTask } from './tasks/closeMilestone';
-import { pluginDevTask } from './tasks/plugin.dev';
-import { githubPublishTask } from './tasks/plugin.utils';
-import { pluginUpdateTask } from './tasks/plugin.update';
-import { ciBuildPluginTask, ciPackagePluginTask, ciPluginReportTask } from './tasks/plugin.ci';
-import { buildPackageTask } from './tasks/package.build';
-import { pluginCreateTask } from './tasks/plugin.create';
-import { pluginSignTask } from './tasks/plugin.sign';
-import { bundleManagedTask } from './tasks/plugin/bundle.managed';
 import { componentCreateTask } from './tasks/component.create';
 import { nodeVersionCheckerTask } from './tasks/nodeVersionChecker';
+import { buildPackageTask } from './tasks/package.build';
+import { pluginBuildTask } from './tasks/plugin.build';
+import { ciBuildPluginTask, ciPackagePluginTask, ciPluginReportTask } from './tasks/plugin.ci';
+import { pluginCreateTask } from './tasks/plugin.create';
+import { pluginDevTask } from './tasks/plugin.dev';
+import { pluginSignTask } from './tasks/plugin.sign';
+import { pluginTestTask } from './tasks/plugin.tests';
+import { pluginUpdateTask } from './tasks/plugin.update';
+import { getToolkitVersion, githubPublishTask } from './tasks/plugin.utils';
+import { bundleManagedTask } from './tasks/plugin/bundle.managed';
+import { searchTestDataSetupTask } from './tasks/searchTestDataSetup';
+import { templateTask } from './tasks/template';
+import { toolkitBuildTask } from './tasks/toolkit.build';
+import { execTask } from './utils/execTask';
 
 export const run = (includeInternalScripts = false) => {
   if (includeInternalScripts) {
     program.option('-d, --depreciate <scripts>', 'Inform about npm script deprecation', (v) => v.split(','));
-    program
-      .command('core:start')
-      .option('-h, --hot', 'Run front-end with HRM enabled')
-      .option('-T, --noTsCheck', 'Run bundler without TS type checking')
-      .option('-t, --watchTheme', 'Watch for theme changes and regenerate variables.scss files')
-      .description('Starts Grafana front-end in development mode with watch enabled')
-      .action(async (cmd) => {
-        await execTask(startTask)({
-          watchThemes: cmd.watchTheme,
-          noTsCheck: cmd.noTsCheck,
-          hot: cmd.hot,
-        });
-      });
 
     program
       .command('package:build')
@@ -132,8 +117,7 @@ export const run = (includeInternalScripts = false) => {
   }
 
   program.option('-v, --version', 'Toolkit version').action(async () => {
-    const pkg = await fs.readFile(`${__dirname}/../../package.json`, 'utf8');
-    const { version } = JSON.parse(pkg);
+    const version = getToolkitVersion();
     console.log(`v${version}`);
   });
 
@@ -166,12 +150,10 @@ export const run = (includeInternalScripts = false) => {
   program
     .command('plugin:dev')
     .option('-w, --watch', 'Run plugin development mode with watch enabled')
-    .option('--yarnlink', 'symlink this project to the local grafana/toolkit')
     .description('Starts plugin dev mode')
     .action(async (cmd) => {
       await execTask(pluginDevTask)({
         watch: !!cmd.watch,
-        yarnlink: !!cmd.yarnlink,
         silent: true,
       });
     });
@@ -200,7 +182,21 @@ export const run = (includeInternalScripts = false) => {
   program
     .command('plugin:sign')
     .option('--signatureType <type>', 'Signature Type')
-    .option('--rootUrls <urls...>', 'Root URLs')
+    .option(
+      '--rootUrls <urls...>',
+      'Root URLs',
+      function (url: string, urls: string[]) {
+        if (typeof url !== 'string') {
+          return urls;
+        }
+
+        const parts = url.split(',');
+        urls.push(...parts);
+
+        return urls;
+      },
+      []
+    )
     .description('Create a plugin signature')
     .action(async (cmd) => {
       await execTask(pluginSignTask)({
@@ -280,10 +276,11 @@ export const run = (includeInternalScripts = false) => {
 
   program.parse(process.argv);
 
-  if (program.depreciate && program.depreciate.length === 2) {
+  const options = program.opts();
+  if (options.depreciate && options.depreciate.length === 2) {
     console.log(
       chalk.yellow.bold(
-        `[NPM script depreciation] ${program.depreciate[0]} is deprecated! Use ${program.depreciate[1]} instead!`
+        `[NPM script depreciation] ${options.depreciate[0]} is deprecated! Use ${options.depreciate[1]} instead!`
       )
     );
   }

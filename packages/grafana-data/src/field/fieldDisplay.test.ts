@@ -1,10 +1,13 @@
 import { merge } from 'lodash';
-import { getFieldDisplayValues, GetFieldDisplayValuesOptions } from './fieldDisplay';
+
 import { toDataFrame } from '../dataframe/processDataFrame';
+import { createTheme } from '../themes';
 import { ReducerID } from '../transformations/fieldReducer';
 import { MappingType, SpecialValueMatch, ValueMapping } from '../types';
+
+import { getDisplayProcessor } from './displayProcessor';
+import { getFieldDisplayValues, GetFieldDisplayValuesOptions } from './fieldDisplay';
 import { standardFieldConfigEditorRegistry } from './standardFieldConfigEditorRegistry';
-import { createTheme } from '../themes';
 
 describe('FieldDisplay', () => {
   beforeAll(() => {
@@ -256,6 +259,48 @@ describe('FieldDisplay', () => {
       expect(result[0].display.title).toEqual('A');
       expect(result[0].display.text).toEqual('10');
       expect(result[1].display.title).toEqual('B');
+      expect(result[1].display.text).toEqual('20');
+    });
+
+    it('Single other string field with value mappings', () => {
+      const options = createDisplayOptions({
+        reduceOptions: {
+          values: true,
+          calcs: [],
+        },
+        data: [
+          toDataFrame({
+            fields: [
+              {
+                name: 'Name',
+                values: ['A', 'B'],
+                config: {
+                  mappings: [
+                    {
+                      type: MappingType.ValueToText,
+                      options: {
+                        A: { text: 'Yay' },
+                        B: { text: 'Cool' },
+                      },
+                    },
+                  ],
+                },
+              },
+              { name: 'Value', values: [10, 20] },
+            ],
+          }),
+        ],
+      });
+
+      options.data![0].fields[0].display = getDisplayProcessor({
+        field: options.data![0].fields[0],
+        theme: createTheme(),
+      });
+
+      const result = getFieldDisplayValues(options);
+      expect(result[0].display.title).toEqual('Yay');
+      expect(result[0].display.text).toEqual('10');
+      expect(result[1].display.title).toEqual('Cool');
       expect(result[1].display.text).toEqual('20');
     });
 

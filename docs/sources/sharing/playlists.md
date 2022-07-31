@@ -1,9 +1,15 @@
-+++
-title = "Playlists"
-keywords = ["grafana", "dashboard", "documentation", "playlist"]
-weight = 4
-draft = "true"
-+++
+---
+aliases:
+  - /docs/grafana/latest/sharing/playlists/
+draft: 'true'
+keywords:
+  - grafana
+  - dashboard
+  - documentation
+  - playlist
+title: Playlists
+weight: 4
+---
 
 # Playlists
 
@@ -132,7 +138,7 @@ You can control a playlist in **Normal** or **TV** mode after it's started, usin
 | Stop (square)                  | Ends the playlist, and exits to the current dashboard.                                                                                          |
 | Cycle view mode (monitor icon) | Rotates the display of the dashboards in different view modes.                                                                                  |
 | Time range                     | Displays data within a time range. It can be set to display the last 5 minutes up to 5 years ago, or a custom time range, using the down arrow. |
-| Refresh (circle arrow)         | Reloads the dashboard, to display the current data. It can be set to reload automatically every 5 seconds to 1 day, using the drop down arrow.  |
+| Refresh (circle arrow)         | Reloads the dashboard, to display the current data. It can be set to reload automatically every 5 seconds to 1 day, using the drop-down arrow.  |
 
 > Shortcut: Press the Esc key to stop the playlist from your keyboard.
 

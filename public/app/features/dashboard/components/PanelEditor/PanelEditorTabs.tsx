@@ -1,16 +1,19 @@
-import React, { FC, useEffect } from 'react';
 import { css } from '@emotion/css';
-import { IconName, Tab, TabContent, TabsBar, useForceUpdate, useStyles2 } from '@grafana/ui';
-import { TransformationsEditor } from '../TransformationsEditor/TransformationsEditor';
-import { DashboardModel, PanelModel } from '../../state';
-import { PanelEditorTab, PanelEditorTabId } from './types';
+import React, { FC, useEffect } from 'react';
 import { Subscription } from 'rxjs';
-import { PanelQueriesChangedEvent, PanelTransformationsChangedEvent } from 'app/types/events';
-import { PanelEditorQueries } from './PanelEditorQueries';
+
 import { GrafanaTheme2 } from '@grafana/data';
 import { config } from '@grafana/runtime';
+import { IconName, Tab, TabContent, TabsBar, useForceUpdate, useStyles2 } from '@grafana/ui';
 import AlertTabIndex from 'app/features/alerting/AlertTabIndex';
 import { PanelAlertTab } from 'app/features/alerting/unified/PanelAlertTab';
+import { PanelQueriesChangedEvent, PanelTransformationsChangedEvent } from 'app/types/events';
+
+import { DashboardModel, PanelModel } from '../../state';
+import { TransformationsEditor } from '../TransformationsEditor/TransformationsEditor';
+
+import { PanelEditorQueries } from './PanelEditorQueries';
+import { PanelEditorTab, PanelEditorTabId } from './types';
 
 interface PanelEditorTabsProps {
   panel: PanelModel;
@@ -28,7 +31,7 @@ export const PanelEditorTabs: FC<PanelEditorTabsProps> = React.memo(({ panel, da
     eventSubs.add(panel.events.subscribe(PanelQueriesChangedEvent, forceUpdate));
     eventSubs.add(panel.events.subscribe(PanelTransformationsChangedEvent, forceUpdate));
     return () => eventSubs.unsubscribe();
-  }, [panel, forceUpdate]);
+  }, [panel, dashboard, forceUpdate]);
 
   const activeTab = tabs.find((item) => item.active)!;
 
@@ -38,20 +41,10 @@ export const PanelEditorTabs: FC<PanelEditorTabsProps> = React.memo(({ panel, da
 
   return (
     <div className={styles.wrapper}>
-      <TabsBar className={styles.tabBar}>
+      <TabsBar className={styles.tabBar} hideBorder>
         {tabs.map((tab) => {
-          if (config.featureToggles.ngalert && tab.id === PanelEditorTabId.Alert) {
-            return (
-              <PanelAlertTab
-                key={tab.id}
-                label={tab.text}
-                active={tab.active}
-                onChangeTab={() => onChangeTab(tab)}
-                icon={tab.icon as IconName}
-                panel={panel}
-                dashboard={dashboard}
-              />
-            );
+          if (tab.id === PanelEditorTabId.Alert) {
+            return renderAlertTab(tab, panel, dashboard, onChangeTab);
           }
           return (
             <Tab
@@ -90,6 +83,48 @@ function getCounter(panel: PanelModel, tab: PanelEditorTab) {
   return null;
 }
 
+function renderAlertTab(
+  tab: PanelEditorTab,
+  panel: PanelModel,
+  dashboard: DashboardModel,
+  onChangeTab: (tab: PanelEditorTab) => void
+) {
+  const alertingDisabled = !config.alertingEnabled && !config.unifiedAlertingEnabled;
+
+  if (alertingDisabled) {
+    return null;
+  }
+
+  if (config.unifiedAlertingEnabled) {
+    return (
+      <PanelAlertTab
+        key={tab.id}
+        label={tab.text}
+        active={tab.active}
+        onChangeTab={() => onChangeTab(tab)}
+        icon={tab.icon as IconName}
+        panel={panel}
+        dashboard={dashboard}
+      />
+    );
+  }
+
+  if (config.alertingEnabled) {
+    return (
+      <Tab
+        key={tab.id}
+        label={tab.text}
+        active={tab.active}
+        onChangeTab={() => onChangeTab(tab)}
+        icon={tab.icon as IconName}
+        counter={getCounter(panel, tab)}
+      />
+    );
+  }
+
+  return null;
+}
+
 const getStyles = (theme: GrafanaTheme2) => {
   return {
     wrapper: css`
@@ -107,7 +142,10 @@ const getStyles = (theme: GrafanaTheme2) => {
       flex-grow: 1;
       min-height: 0;
       background: ${theme.colors.background.primary};
-      border-right: 1px solid ${theme.components.panel.borderColor};
+      border: 1px solid ${theme.components.panel.borderColor};
+      border-left: none;
+      border-bottom: none;
+      border-top-right-radius: ${theme.shape.borderRadius(1.5)};
     `,
   };
 };

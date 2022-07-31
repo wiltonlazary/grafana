@@ -1,3 +1,5 @@
+import uPlot, { Series } from 'uplot';
+
 import {
   colorManipulator,
   DataFrameFieldIndex,
@@ -7,7 +9,6 @@ import {
   GrafanaTheme2,
   ThresholdsConfig,
 } from '@grafana/data';
-import uPlot, { Series } from 'uplot';
 import {
   BarAlignment,
   BarConfig,
@@ -19,13 +20,18 @@ import {
   PointsConfig,
   VisibilityMode,
 } from '@grafana/schema';
+
 import { PlotConfigBuilder } from '../types';
+
 import { getHueGradientFn, getOpacityGradientFn, getScaleGradientFn } from './gradientFills';
 
 export interface SeriesProps extends LineConfig, BarConfig, FillConfig, PointsConfig {
   scaleKey: string;
   pxAlign?: boolean;
   gradientMode?: GraphGradientMode;
+  dynamicSeriesColor?: (seriesIdx: number) => string | undefined;
+
+  facets?: uPlot.Series.Facet[];
 
   /** Used when gradientMode is set to Scheme */
   thresholds?: ThresholdsConfig;
@@ -36,9 +42,9 @@ export interface SeriesProps extends LineConfig, BarConfig, FillConfig, PointsCo
   softMax?: number | null;
 
   drawStyle?: GraphDrawStyle;
-  pathBuilder?: Series.PathBuilder;
-  pointsFilter?: Series.Points.Filter;
-  pointsBuilder?: Series.Points.Show;
+  pathBuilder?: Series.PathBuilder | null;
+  pointsFilter?: Series.Points.Filter | null;
+  pointsBuilder?: Series.Points.Show | null;
   show?: boolean;
   dataFrameFieldIndex?: DataFrameFieldIndex;
   theme: GrafanaTheme2;
@@ -48,6 +54,7 @@ export interface SeriesProps extends LineConfig, BarConfig, FillConfig, PointsCo
 export class UPlotSeriesBuilder extends PlotConfigBuilder<SeriesProps, Series> {
   getConfig() {
     const {
+      facets,
       drawStyle,
       pathBuilder,
       pointsBuilder,
@@ -106,7 +113,7 @@ export class UPlotSeriesBuilder extends PlotConfigBuilder<SeriesProps, Series> {
       points: {
         stroke: useColor,
         fill: useColor,
-        size: pointSize,
+        size: !pointSize || pointSize < lineWidth! ? undefined : pointSize,
         filter: pointsFilter,
       },
     };
@@ -132,6 +139,7 @@ export class UPlotSeriesBuilder extends PlotConfigBuilder<SeriesProps, Series> {
 
     return {
       scale: scaleKey,
+      facets,
       spanGaps: typeof spanNulls === 'number' ? false : spanNulls,
       value: () => '',
       pxAlign,
@@ -143,7 +151,22 @@ export class UPlotSeriesBuilder extends PlotConfigBuilder<SeriesProps, Series> {
   }
 
   private getLineColor(): Series.Stroke {
-    const { lineColor, gradientMode, colorMode, thresholds, theme, hardMin, hardMax, softMin, softMax } = this.props;
+    const {
+      lineColor,
+      gradientMode,
+      colorMode,
+      thresholds,
+      theme,
+      hardMin,
+      hardMax,
+      softMin,
+      softMax,
+      dynamicSeriesColor,
+    } = this.props;
+
+    if (gradientMode === GraphGradientMode.None && dynamicSeriesColor) {
+      return (plot: uPlot, seriesIdx: number) => dynamicSeriesColor(seriesIdx) ?? lineColor ?? FALLBACK_COLOR;
+    }
 
     if (gradientMode === GraphGradientMode.Scheme && colorMode?.id !== FieldColorModeId.Fixed) {
       return getScaleGradientFn(1, theme, colorMode, thresholds, hardMin, hardMax, softMin, softMax);
@@ -165,6 +188,7 @@ export class UPlotSeriesBuilder extends PlotConfigBuilder<SeriesProps, Series> {
       hardMax,
       softMin,
       softMax,
+      dynamicSeriesColor,
     } = this.props;
 
     if (fillColor) {
@@ -173,6 +197,14 @@ export class UPlotSeriesBuilder extends PlotConfigBuilder<SeriesProps, Series> {
 
     const mode = gradientMode ?? GraphGradientMode.None;
     const opacityPercent = (fillOpacity ?? 0) / 100;
+
+    if (mode === GraphGradientMode.None && dynamicSeriesColor && opacityPercent > 0) {
+      return (u: uPlot, seriesIdx: number) => {
+        // @ts-ignore
+        let lineColor = u.series[seriesIdx]._stroke; // cache
+        return colorManipulator.alpha(lineColor ?? '', opacityPercent);
+      };
+    }
 
     switch (mode) {
       case GraphGradientMode.Opacity:
@@ -209,7 +241,7 @@ function mapDrawStyleToPathBuilder(
   lineInterpolation?: LineInterpolation,
   barAlignment = 0,
   barWidthFactor = 0.6,
-  barMaxWidth = Infinity
+  barMaxWidth = 200
 ): Series.PathBuilder {
   const pathBuilders = uPlot.paths;
 

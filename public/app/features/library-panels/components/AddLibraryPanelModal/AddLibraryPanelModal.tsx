@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useAsync, useDebounce } from 'react-use';
+
+import { isFetchError } from '@grafana/runtime';
 import { Button, Field, Input, Modal } from '@grafana/ui';
 import { FolderPicker } from 'app/core/components/Select/FolderPicker';
+
 import { PanelModel } from '../../../dashboard/state';
-import { usePanelSave } from '../../utils/usePanelSave';
-import { useAsync, useDebounce } from 'react-use';
 import { getLibraryPanelByName } from '../../state/api';
+import { usePanelSave } from '../../utils/usePanelSave';
 
 interface AddLibraryPanelContentsProps {
   onDismiss: () => void;
@@ -34,7 +37,9 @@ export const AddLibraryPanelContents = ({ panel, initialFolderId, onDismiss }: A
     try {
       return !(await getLibraryPanelByName(panelName)).some((lp) => lp.folderId === folderId);
     } catch (err) {
-      err.isHandled = true;
+      if (isFetchError(err)) {
+        err.isHandled = true;
+      }
       return true;
     } finally {
       setWaiting(false);
@@ -51,10 +56,19 @@ export const AddLibraryPanelContents = ({ panel, initialFolderId, onDismiss }: A
         invalid={invalidInput}
         error={invalidInput ? 'Library panel with this name already exists' : ''}
       >
-        <Input name="name" value={panelName} onChange={(e) => setPanelName(e.currentTarget.value)} />
+        <Input
+          id="share-panel-library-panel-name-input"
+          name="name"
+          value={panelName}
+          onChange={(e) => setPanelName(e.currentTarget.value)}
+        />
       </Field>
       <Field label="Save in folder" description="Library panel permissions are derived from the folder permissions">
-        <FolderPicker onChange={({ id }) => setFolderId(id)} initialFolderId={initialFolderId} />
+        <FolderPicker
+          onChange={({ id }) => setFolderId(id)}
+          initialFolderId={initialFolderId}
+          inputId="share-panel-library-panel-folder-picker"
+        />
       </Field>
 
       <Modal.ButtonRow>

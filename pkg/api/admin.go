@@ -5,12 +5,24 @@ import (
 	"net/http"
 
 	"github.com/grafana/grafana/pkg/api/response"
-	"github.com/grafana/grafana/pkg/bus"
 	"github.com/grafana/grafana/pkg/models"
 	ac "github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/setting"
 )
 
+// swagger:route GET /admin/settings admin adminGetSettings
+//
+// Fetch settings.
+//
+// If you are running Grafana Enterprise and have Fine-grained access control enabled, you need to have a permission with action `settings:read` and scopes: `settings:*`, `settings:auth.saml:` and `settings:auth.saml:enabled` (property level).
+//
+// Security:
+// - basic:
+//
+// Responses:
+// 200: adminGetSettingsResponse
+// 401: unauthorisedError
+// 403: forbiddenError
 func (hs *HTTPServer) AdminGetSettings(c *models.ReqContext) response.Response {
 	settings, err := hs.getAuthorizedSettings(c.Req.Context(), c.SignedInUser, hs.SettingsProvider.Current())
 	if err != nil {
@@ -19,14 +31,26 @@ func (hs *HTTPServer) AdminGetSettings(c *models.ReqContext) response.Response {
 	return response.JSON(http.StatusOK, settings)
 }
 
-func AdminGetStats(c *models.ReqContext) response.Response {
+// swagger:route GET /admin/stats admin adminGetStats
+//
+// Fetch Grafana Stats.
+//
+// Only works with Basic Authentication (username and password). See introduction for an explanation.
+// If you are running Grafana Enterprise and have Fine-grained access control enabled, you need to have a permission with action `server:stats:read`.
+//
+// Responses:
+// 200: adminGetStatsResponse
+// 401: unauthorisedError
+// 403: forbiddenError
+// 500: internalServerError
+func (hs *HTTPServer) AdminGetStats(c *models.ReqContext) response.Response {
 	statsQuery := models.GetAdminStatsQuery{}
 
-	if err := bus.Dispatch(&statsQuery); err != nil {
+	if err := hs.SQLStore.GetAdminStats(c.Req.Context(), &statsQuery); err != nil {
 		return response.Error(500, "Failed to get admin stats from database", err)
 	}
 
-	return response.JSON(200, statsQuery.Result)
+	return response.JSON(http.StatusOK, statsQuery.Result)
 }
 
 func (hs *HTTPServer) getAuthorizedSettings(ctx context.Context, user *models.SignedInUser, bag setting.SettingsBag) (setting.SettingsBag, error) {
@@ -72,4 +96,16 @@ func (hs *HTTPServer) getAuthorizedSettings(ctx context.Context, user *models.Si
 		}
 	}
 	return authorizedBag, nil
+}
+
+// swagger:response adminGetSettingsResponse
+type GetSettingsResponse struct {
+	// in:body
+	Body setting.SettingsBag `json:"body"`
+}
+
+// swagger:response adminGetStatsResponse
+type GetStatsResponse struct {
+	// in:body
+	Body models.AdminStats `json:"body"`
 }

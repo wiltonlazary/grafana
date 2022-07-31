@@ -24,6 +24,7 @@ type GlobalQuota struct {
 	ApiKey     int64 `target:"api_key"`
 	Session    int64 `target:"-"`
 	AlertRule  int64 `target:"alert_rule"`
+	File       int64 `target:"file"`
 }
 
 func (q *OrgQuota) ToMap() map[string]int64 {
@@ -68,7 +69,7 @@ func (cfg *Cfg) readQuotaSettings() {
 
 	var alertOrgQuota int64
 	var alertGlobalQuota int64
-	if cfg.IsNgAlertEnabled() {
+	if cfg.UnifiedAlerting.IsEnabled() {
 		alertOrgQuota = quota.Key("org_alert_rule").MustInt64(100)
 		alertGlobalQuota = quota.Key("global_alert_rule").MustInt64(-1)
 	}
@@ -94,6 +95,7 @@ func (cfg *Cfg) readQuotaSettings() {
 		Dashboard:  quota.Key("global_dashboard").MustInt64(-1),
 		ApiKey:     quota.Key("global_api_key").MustInt64(-1),
 		Session:    quota.Key("global_session").MustInt64(-1),
+		File:       quota.Key("global_file").MustInt64(-1),
 		AlertRule:  alertGlobalQuota,
 	}
 

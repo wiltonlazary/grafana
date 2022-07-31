@@ -1,10 +1,13 @@
 import React, { useCallback } from 'react';
-import { LegendProps, SeriesVisibilityChangeBehavior, VizLegendItem } from './types';
-import { LegendDisplayMode } from '@grafana/schema';
-import { VizLegendTable } from './VizLegendTable';
-import { VizLegendList } from './VizLegendList';
+
 import { DataHoverClearEvent, DataHoverEvent } from '@grafana/data';
+import { LegendDisplayMode } from '@grafana/schema';
+
 import { SeriesVisibilityChangeMode, usePanelContext } from '../PanelChrome';
+
+import { VizLegendList } from './VizLegendList';
+import { VizLegendTable } from './VizLegendTable';
+import { LegendProps, SeriesVisibilityChangeBehavior, VizLegendItem } from './types';
 import { mapMouseEventToMode } from './utils';
 
 /**
@@ -23,7 +26,7 @@ export function VizLegend<T>({
   itemRenderer,
   readonly,
 }: LegendProps<T>) {
-  const { eventBus, onToggleSeriesVisibility } = usePanelContext();
+  const { eventBus, onToggleSeriesVisibility, onToggleLegendSort } = usePanelContext();
 
   const onMouseEnter = useCallback(
     (item: VizLegendItem, event: React.MouseEvent<HTMLElement, MouseEvent>) => {
@@ -82,7 +85,7 @@ export function VizLegend<T>({
           sortBy={sortKey}
           sortDesc={sortDesc}
           onLabelClick={onLegendLabelClick}
-          onToggleSort={onToggleSort}
+          onToggleSort={onToggleSort || onToggleLegendSort}
           onLabelMouseEnter={onMouseEnter}
           onLabelMouseOut={onMouseOut}
           itemRenderer={itemRenderer}

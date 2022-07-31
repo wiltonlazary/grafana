@@ -1,11 +1,13 @@
 import React, { Component } from 'react';
 import { connect, ConnectedProps } from 'react-redux';
 import AutoSizer from 'react-virtualized-auto-sizer';
+
+import { GrafanaRouteComponentProps } from 'app/core/navigation/types';
+import { DashboardModel, PanelModel } from 'app/features/dashboard/state';
+import { StoreState } from 'app/types';
+
 import { DashboardPanel } from '../dashgrid/DashboardPanel';
 import { initDashboard } from '../state/initDashboard';
-import { StoreState } from 'app/types';
-import { PanelModel } from 'app/features/dashboard/state';
-import { GrafanaRouteComponentProps } from 'app/core/navigation/types';
 
 export interface DashboardPageRouteParams {
   uid?: string;
@@ -74,40 +76,54 @@ export class SoloPanelPage extends Component<Props, State> {
   }
 
   render() {
-    const { dashboard } = this.props;
-    const { notFound, panel } = this.state;
-
-    if (notFound) {
-      return <div className="alert alert-error">Panel with id {this.getPanelId()} not found</div>;
-    }
-
-    if (!panel || !dashboard) {
-      return <div>Loading & initializing dashboard</div>;
-    }
-
     return (
-      <div className="panel-solo">
-        <AutoSizer>
-          {({ width, height }) => {
-            if (width === 0) {
-              return null;
-            }
-            return (
-              <DashboardPanel
-                width={width}
-                height={height}
-                dashboard={dashboard}
-                panel={panel}
-                isEditing={false}
-                isViewing={false}
-                isInView={true}
-              />
-            );
-          }}
-        </AutoSizer>
-      </div>
+      <SoloPanel
+        dashboard={this.props.dashboard}
+        notFound={this.state.notFound}
+        panel={this.state.panel}
+        panelId={this.getPanelId()}
+      />
     );
   }
 }
+
+export interface SoloPanelProps extends State {
+  dashboard: DashboardModel | null;
+  panelId: number;
+}
+
+export const SoloPanel = ({ dashboard, notFound, panel, panelId }: SoloPanelProps) => {
+  if (notFound) {
+    return <div className="alert alert-error">Panel with id {panelId} not found</div>;
+  }
+
+  if (!panel || !dashboard) {
+    return <div>Loading & initializing dashboard</div>;
+  }
+
+  return (
+    <div className="panel-solo">
+      <AutoSizer>
+        {({ width, height }) => {
+          if (width === 0) {
+            return null;
+          }
+          return (
+            <DashboardPanel
+              stateKey={panel.key}
+              width={width}
+              height={height}
+              dashboard={dashboard}
+              panel={panel}
+              isEditing={false}
+              isViewing={false}
+              lazy={false}
+            />
+          );
+        }}
+      </AutoSizer>
+    </div>
+  );
+};
 
 export default connector(SoloPanelPage);

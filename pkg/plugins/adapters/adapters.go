@@ -2,18 +2,33 @@
 package adapters
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+
 	"github.com/grafana/grafana/pkg/models"
+	"github.com/grafana/grafana/pkg/services/datasources"
 )
 
-// ModelToInstanceSettings converts a models.DataSource to a backend.DataSourceInstanceSettings.
-func ModelToInstanceSettings(ds *models.DataSource) (*backend.DataSourceInstanceSettings, error) {
-	jsonDataBytes, err := ds.JsonData.MarshalJSON()
+// ModelToInstanceSettings converts a datasources.DataSource to a backend.DataSourceInstanceSettings.
+func ModelToInstanceSettings(ds *datasources.DataSource, decryptFn func(ds *datasources.DataSource) (map[string]string, error),
+) (*backend.DataSourceInstanceSettings, error) {
+	var jsonDataBytes json.RawMessage
+	if ds.JsonData != nil {
+		var err error
+		jsonDataBytes, err = ds.JsonData.MarshalJSON()
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert data source to instance settings: %w", err)
+		}
+	}
+	decrypted, err := decryptFn(ds)
 	if err != nil {
 		return nil, err
 	}
 
 	return &backend.DataSourceInstanceSettings{
+		Type:                    ds.Type,
 		ID:                      ds.Id,
 		Name:                    ds.Name,
 		URL:                     ds.Url,
@@ -23,9 +38,9 @@ func ModelToInstanceSettings(ds *models.DataSource) (*backend.DataSourceInstance
 		BasicAuthEnabled:        ds.BasicAuth,
 		BasicAuthUser:           ds.BasicAuthUser,
 		JSONData:                jsonDataBytes,
-		DecryptedSecureJSONData: ds.DecryptedValues(),
+		DecryptedSecureJSONData: decrypted,
 		Updated:                 ds.Updated,
-	}, nil
+	}, err
 }
 
 // BackendUserFromSignedInUser converts Grafana's SignedInUser model

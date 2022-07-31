@@ -1,14 +1,15 @@
-import React, { PureComponent } from 'react';
 import memoizeOne from 'memoize-one';
+import React, { PureComponent } from 'react';
+
 import { TimeZone, LogsDedupStrategy, LogRowModel, Field, LinkModel, LogsSortOrder, sortLogRows } from '@grafana/data';
 
-import { Themeable2 } from '../../types/theme';
 import { withTheme2 } from '../../themes/index';
-import { getLogRowStyles } from './getLogRowStyles';
+import { Themeable2 } from '../../types/theme';
 
 //Components
 import { LogRow } from './LogRow';
 import { RowContextOptions } from './LogRowContextProvider';
+import { getLogRowStyles } from './getLogRowStyles';
 
 export const PREVIEW_LIMIT = 100;
 
@@ -33,6 +34,7 @@ export interface Props extends Themeable2 {
   getFieldLinks?: (field: Field, rowIndex: number) => Array<LinkModel<Field>>;
   onClickShowDetectedField?: (key: string) => void;
   onClickHideDetectedField?: (key: string) => void;
+  onLogRowHover?: (row?: LogRowModel) => void;
 }
 
 interface State {
@@ -99,6 +101,7 @@ class UnThemedLogRows extends PureComponent<Props, State> {
       onClickShowDetectedField,
       onClickHideDetectedField,
       forceEscape,
+      onLogRowHover,
     } = this.props;
     const { renderAll } = this.state;
     const { logsRowsTable } = getLogRowStyles(theme);
@@ -144,6 +147,7 @@ class UnThemedLogRows extends PureComponent<Props, State> {
                 getFieldLinks={getFieldLinks}
                 logsSortOrder={logsSortOrder}
                 forceEscape={forceEscape}
+                onLogRowHover={onLogRowHover}
               />
             ))}
           {hasData &&
@@ -170,6 +174,7 @@ class UnThemedLogRows extends PureComponent<Props, State> {
                 getFieldLinks={getFieldLinks}
                 logsSortOrder={logsSortOrder}
                 forceEscape={forceEscape}
+                onLogRowHover={onLogRowHover}
               />
             ))}
           {hasData && !renderAll && (

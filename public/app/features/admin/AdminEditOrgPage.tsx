@@ -1,15 +1,19 @@
-import React, { FC, useState, useEffect } from 'react';
-import Page from 'app/core/components/Page/Page';
-import { useSelector } from 'react-redux';
-import { StoreState, OrgUser } from 'app/types';
-import { getNavModel } from 'app/core/selectors/navModel';
-import UsersTable from '../users/UsersTable';
-import { useAsyncFn } from 'react-use';
-import { getBackendSrv } from '@grafana/runtime';
-import { UrlQueryValue } from '@grafana/data';
-import { Form, Field, Input, Button, Legend } from '@grafana/ui';
 import { css } from '@emotion/css';
+import React, { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import { useAsyncFn } from 'react-use';
+
+import { UrlQueryValue } from '@grafana/data';
+import { getBackendSrv } from '@grafana/runtime';
+import { Form, Field, Input, Button, Legend, Alert } from '@grafana/ui';
+import { Page } from 'app/core/components/Page/Page';
+import { contextSrv } from 'app/core/core';
 import { GrafanaRouteComponentProps } from 'app/core/navigation/types';
+import { getNavModel } from 'app/core/selectors/navModel';
+import { accessControlQueryParam } from 'app/core/utils/accessControl';
+import { StoreState, OrgUser, AccessControlAction } from 'app/types';
+
+import UsersTable from '../users/UsersTable';
 
 interface OrgNameDTO {
   orgName: string;
@@ -20,7 +24,10 @@ const getOrg = async (orgId: UrlQueryValue) => {
 };
 
 const getOrgUsers = async (orgId: UrlQueryValue) => {
-  return await getBackendSrv().get('/api/orgs/' + orgId + '/users');
+  if (contextSrv.hasPermission(AccessControlAction.OrgUsersRead)) {
+    return await getBackendSrv().get(`/api/orgs/${orgId}/users`, accessControlQueryParam());
+  }
+  return [];
 };
 
 const updateOrgUserRole = async (orgUser: OrgUser, orgId: UrlQueryValue) => {
@@ -33,10 +40,12 @@ const removeOrgUser = async (orgUser: OrgUser, orgId: UrlQueryValue) => {
 
 interface Props extends GrafanaRouteComponentProps<{ id: string }> {}
 
-export const AdminEditOrgPage: FC<Props> = ({ match }) => {
+export default function AdminEditOrgPage({ match }: Props) {
   const navIndex = useSelector((state: StoreState) => state.navIndex);
   const navModel = getNavModel(navIndex, 'global-orgs');
   const orgId = parseInt(match.params.id, 10);
+  const canWriteOrg = contextSrv.hasPermission(AccessControlAction.OrgsWrite);
+  const canReadUsers = contextSrv.hasPermission(AccessControlAction.OrgUsersRead);
 
   const [users, setUsers] = useState<OrgUser[]>([]);
 
@@ -52,12 +61,20 @@ export const AdminEditOrgPage: FC<Props> = ({ match }) => {
     return await getBackendSrv().put('/api/orgs/' + orgId, { ...orgState.value, name });
   };
 
+  const renderMissingUserListRightsMessage = () => {
+    return (
+      <Alert severity="info" title="Access denied">
+        You do not have permission to see users in this organization. To update this organization, contact your server
+        administrator.
+      </Alert>
+    );
+  };
+
   return (
     <Page navModel={navModel}>
       <Page.Contents>
         <>
           <Legend>Edit organization</Legend>
-
           {orgState.value && (
             <Form
               defaultValues={{ orgName: orgState.value.name }}
@@ -65,10 +82,12 @@ export const AdminEditOrgPage: FC<Props> = ({ match }) => {
             >
               {({ register, errors }) => (
                 <>
-                  <Field label="Name" invalid={!!errors.orgName} error="Name is required">
+                  <Field label="Name" invalid={!!errors.orgName} error="Name is required" disabled={!canWriteOrg}>
                     <Input {...register('orgName', { required: true })} id="org-name-input" />
                   </Field>
-                  <Button>Update</Button>
+                  <Button type="submit" disabled={!canWriteOrg}>
+                    Update
+                  </Button>
                 </>
               )}
             </Form>
@@ -80,9 +99,11 @@ export const AdminEditOrgPage: FC<Props> = ({ match }) => {
             `}
           >
             <Legend>Organization users</Legend>
-            {!!users.length && (
+            {!canReadUsers && renderMissingUserListRightsMessage()}
+            {canReadUsers && !!users.length && (
               <UsersTable
                 users={users}
+                orgId={orgId}
                 onRoleChange={(role, orgUser) => {
                   updateOrgUserRole({ ...orgUser, role }, orgId);
                   setUsers(
@@ -107,6 +128,4 @@ export const AdminEditOrgPage: FC<Props> = ({ match }) => {
       </Page.Contents>
     </Page>
   );
-};
-
-export default AdminEditOrgPage;
+}

@@ -6,35 +6,48 @@ import {
   getDisplayProcessor,
   GrafanaTheme2,
   isBooleanUnit,
+  TimeRange,
 } from '@grafana/data';
-import { GraphFieldConfig, LineInterpolation, StackingMode } from '@grafana/schema';
+import { GraphFieldConfig, LineInterpolation } from '@grafana/schema';
+import { applyNullInsertThreshold } from '@grafana/ui/src/components/GraphNG/nullInsertThreshold';
+import { nullToValue } from '@grafana/ui/src/components/GraphNG/nullToValue';
 
-// This will return a set of frames with only graphable values included
+/**
+ * Returns null if there are no graphable fields
+ */
 export function prepareGraphableFields(
-  series: DataFrame[] | undefined,
-  theme: GrafanaTheme2
-): { frames?: DataFrame[]; warn?: string } {
+  series: DataFrame[],
+  theme: GrafanaTheme2,
+  timeRange?: TimeRange
+): DataFrame[] | null {
   if (!series?.length) {
-    return { warn: 'No data in response' };
+    return null;
   }
+
   let copy: Field;
-  let hasTimeseries = false;
+
   const frames: DataFrame[] = [];
 
   for (let frame of series) {
-    let isTimeseries = false;
-    let changed = false;
     const fields: Field[] = [];
 
-    for (const field of frame.fields) {
+    let hasTimeField = false;
+    let hasValueField = false;
+
+    let nulledFrame = applyNullInsertThreshold({
+      frame,
+      refFieldPseudoMin: timeRange?.from.valueOf(),
+      refFieldPseudoMax: timeRange?.to.valueOf(),
+    });
+
+    for (const field of nullToValue(nulledFrame).fields) {
       switch (field.type) {
         case FieldType.time:
-          isTimeseries = true;
-          hasTimeseries = true;
+          hasTimeField = true;
           fields.push(field);
           break;
         case FieldType.number:
-          changed = true;
+          hasValueField = true;
           copy = {
             ...field,
             values: new ArrayVector(
@@ -47,15 +60,10 @@ export function prepareGraphableFields(
             ),
           };
 
-          if (copy.config.custom?.stacking?.mode === StackingMode.Percent) {
-            copy.config.unit = 'percentunit';
-            copy.display = getDisplayProcessor({ field: copy, theme });
-          }
-
           fields.push(copy);
           break; // ok
         case FieldType.boolean:
-          changed = true;
+          hasValueField = true;
           const custom: GraphFieldConfig = field.config?.custom ?? {};
           const config = {
             ...field.config,
@@ -63,10 +71,12 @@ export function prepareGraphableFields(
             min: 0,
             custom,
           };
+
           // smooth and linear do not make sense
           if (custom.lineInterpolation !== LineInterpolation.StepBefore) {
             custom.lineInterpolation = LineInterpolation.StepAfter;
           }
+
           copy = {
             ...field,
             config,
@@ -80,35 +90,36 @@ export function prepareGraphableFields(
               })
             ),
           };
+
           if (!isBooleanUnit(config.unit)) {
             config.unit = 'bool';
             copy.display = getDisplayProcessor({ field: copy, theme });
           }
+
           fields.push(copy);
           break;
-        default:
-          changed = true;
       }
     }
 
-    if (isTimeseries && fields.length > 1) {
-      hasTimeseries = true;
-      if (changed) {
-        frames.push({
-          ...frame,
-          fields,
-        });
-      } else {
-        frames.push(frame);
-      }
+    if (hasTimeField && hasValueField) {
+      frames.push({
+        ...frame,
+        length: nulledFrame.length,
+        fields,
+      });
     }
   }
 
-  if (!hasTimeseries) {
-    return { warn: 'Data does not have a time field' };
+  if (frames.length) {
+    return frames;
   }
-  if (!frames.length) {
-    return { warn: 'No graphable fields' };
+
+  return null;
+}
+
+export function getTimezones(timezones: string[] | undefined, defaultTimezone: string): string[] {
+  if (!timezones || !timezones.length) {
+    return [defaultTimezone];
   }
-  return { frames };
+  return timezones.map((v) => (v?.length ? v : defaultTimezone));
 }

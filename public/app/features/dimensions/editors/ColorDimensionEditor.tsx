@@ -1,12 +1,14 @@
+import { css } from '@emotion/css';
 import React, { FC, useCallback } from 'react';
+
 import { GrafanaTheme2, SelectableValue, StandardEditorProps } from '@grafana/data';
-import { ColorDimensionConfig } from '../types';
 import { Select, ColorPicker, useStyles2 } from '@grafana/ui';
+
 import {
   useFieldDisplayNames,
   useSelectOptions,
 } from '../../../../../packages/grafana-ui/src/components/MatchersUI/utils';
-import { css } from '@emotion/css';
+import { ColorDimensionConfig } from '../types';
 
 const fixedColorOption: SelectableValue<string> = {
   label: 'Fixed color',
@@ -15,6 +17,8 @@ const fixedColorOption: SelectableValue<string> = {
 
 export const ColorDimensionEditor: FC<StandardEditorProps<ColorDimensionConfig, any, any>> = (props) => {
   const { value, context, onChange } = props;
+
+  const defaultColor = 'dark-green';
 
   const styles = useStyles2(getStyles);
   const fieldName = value?.field;
@@ -31,7 +35,7 @@ export const ColorDimensionEditor: FC<StandardEditorProps<ColorDimensionConfig, 
           field,
         });
       } else {
-        const fixed = value.fixed ?? 'grey';
+        const fixed = value?.fixed ?? defaultColor;
         onChange({
           ...value,
           field: undefined,
@@ -46,7 +50,7 @@ export const ColorDimensionEditor: FC<StandardEditorProps<ColorDimensionConfig, 
     (c: string) => {
       onChange({
         field: undefined,
-        fixed: c ?? 'grey',
+        fixed: c ?? defaultColor,
       });
     },
     [onChange]
@@ -57,7 +61,6 @@ export const ColorDimensionEditor: FC<StandardEditorProps<ColorDimensionConfig, 
     <>
       <div className={styles.container}>
         <Select
-          menuShouldPortal
           value={selectedOption}
           options={selectOptions}
           onChange={onSelectChange}
@@ -65,7 +68,7 @@ export const ColorDimensionEditor: FC<StandardEditorProps<ColorDimensionConfig, 
         />
         {isFixed && (
           <div className={styles.picker}>
-            <ColorPicker color={value?.fixed ?? 'grey'} onChange={onColorChange} enableNamedColors={true} />
+            <ColorPicker color={value?.fixed ?? defaultColor} onChange={onColorChange} enableNamedColors={true} />
           </div>
         )}
       </div>

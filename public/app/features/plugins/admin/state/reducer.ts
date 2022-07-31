@@ -1,7 +1,11 @@
-import { createSlice, createEntityAdapter, AnyAction } from '@reduxjs/toolkit';
-import { fetchAll, fetchDetails, install, uninstall, loadPluginDashboards } from './actions';
-import { CatalogPlugin, ReducerState, RequestStatus } from '../types';
+import { createSlice, createEntityAdapter, Reducer, AnyAction, PayloadAction } from '@reduxjs/toolkit';
+
+import { PanelPlugin } from '@grafana/data';
+
 import { STATE_PREFIX } from '../constants';
+import { CatalogPlugin, PluginListDisplayMode, ReducerState, RequestStatus } from '../types';
+
+import { fetchAll, fetchDetails, install, uninstall, loadPluginDashboards, panelPluginLoaded } from './actions';
 
 export const pluginsAdapter = createEntityAdapter<CatalogPlugin>();
 
@@ -18,23 +22,32 @@ const getOriginalActionType = (type: string) => {
   return type.substring(0, separator);
 };
 
-export const { reducer } = createSlice({
+export const initialState: ReducerState = {
+  items: pluginsAdapter.getInitialState(),
+  requests: {},
+  settings: {
+    displayMode: PluginListDisplayMode.Grid,
+  },
+  // Backwards compatibility
+  // (we need to have the following fields in the store as well to be backwards compatible with other parts of Grafana)
+  // TODO<remove once the "plugin_admin_enabled" feature flag is removed>
+  plugins: [],
+  errors: [],
+  searchQuery: '',
+  hasFetched: false,
+  dashboards: [],
+  isLoadingPluginDashboards: false,
+  panels: {},
+};
+
+const slice = createSlice({
   name: 'plugins',
-  initialState: {
-    items: pluginsAdapter.getInitialState(),
-    requests: {},
-    // Backwards compatibility
-    // (we need to have the following fields in the store as well to be backwards compatible with other parts of Grafana)
-    // TODO<remove once the "plugin_admin_enabled" feature flag is removed>
-    plugins: [],
-    errors: [],
-    searchQuery: '',
-    hasFetched: false,
-    dashboards: [],
-    isLoadingPluginDashboards: false,
-    panels: {},
-  } as ReducerState,
-  reducers: {},
+  initialState,
+  reducers: {
+    setDisplayMode(state, action: PayloadAction<PluginListDisplayMode>) {
+      state.settings.displayMode = action.payload;
+    },
+  },
   extraReducers: (builder) =>
     builder
       // Fetch All
@@ -55,8 +68,8 @@ export const { reducer } = createSlice({
       })
       // Load a panel plugin (backward-compatibility)
       // TODO<remove once the "plugin_admin_enabled" feature flag is removed>
-      .addCase(`${STATE_PREFIX}/loadPanelPlugin/fulfilled`, (state, action: AnyAction) => {
-        state.panels[action.payload.meta!.id] = action.payload;
+      .addCase(panelPluginLoaded, (state, action: PayloadAction<PanelPlugin>) => {
+        state.panels[action.payload.meta.id] = action.payload;
       })
       // Start loading panel dashboards (backward-compatibility)
       // TODO<remove once the "plugin_admin_enabled" feature flag is removed>
@@ -68,7 +81,8 @@ export const { reducer } = createSlice({
       // TODO<remove once the "plugin_admin_enabled" feature flag is removed>
       .addCase(loadPluginDashboards.fulfilled, (state, action) => {
         state.isLoadingPluginDashboards = false;
-        state.dashboards = action.payload;
+        // eslint-disable-next-line
+        state.dashboards = action.payload as any; // WritableDraft<PluginDashboard>[],...>
       })
       .addMatcher(isPendingRequest, (state, action) => {
         state.requests[getOriginalActionType(action.type)] = {
@@ -87,3 +101,6 @@ export const { reducer } = createSlice({
         };
       }),
 });
+
+export const { setDisplayMode } = slice.actions;
+export const reducer: Reducer<ReducerState, AnyAction> = slice.reducer;

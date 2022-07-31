@@ -1,11 +1,12 @@
+import { css } from '@emotion/css';
 import React, { PureComponent } from 'react';
 import { connect, ConnectedProps } from 'react-redux';
 import AutoSizer from 'react-virtualized-auto-sizer';
-import { css } from '@emotion/css';
 import { Subscription } from 'rxjs';
 
-import { FieldConfigSource, GrafanaTheme } from '@grafana/data';
+import { FieldConfigSource, GrafanaTheme2 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
+import { isFetchError, locationService } from '@grafana/runtime';
 import {
   HorizontalGroup,
   InlineSwitch,
@@ -13,38 +14,22 @@ import {
   PageToolbar,
   RadioButtonGroup,
   stylesFactory,
+  Themeable2,
   ToolbarButton,
+  withTheme2,
 } from '@grafana/ui';
-
-import config from 'app/core/config';
-import { appEvents } from 'app/core/core';
-import { calculatePanelSize } from './utils';
-
-import { PanelEditorTabs } from './PanelEditorTabs';
-import { DashNavTimeControls } from '../DashNav/DashNavTimeControls';
-import { OptionsPane } from './OptionsPane';
-import { SubMenuItems } from 'app/features/dashboard/components/SubMenu/SubMenuItems';
 import { SplitPaneWrapper } from 'app/core/components/SplitPaneWrapper/SplitPaneWrapper';
-import { SaveDashboardModalProxy } from '../SaveDashboard/SaveDashboardModalProxy';
-import { DashboardPanel } from '../../dashgrid/DashboardPanel';
-
-import { discardPanelChanges, initPanelEditor, updatePanelEditorUIState } from './state/actions';
-
-import { updateTimeZoneForSession } from 'app/features/profile/state/reducers';
-import { toggleTableView } from './state/reducers';
-
-import { getPanelEditorTabs } from './state/selectors';
-import { getPanelStateById } from '../../state/selectors';
-import { getVariables } from 'app/features/variables/state/selectors';
-
-import { StoreState } from 'app/types';
-import { DisplayMode, displayModes, PanelEditorTab } from './types';
-import { DashboardModel, PanelModel } from '../../state';
-import { VisualizationButton } from './VisualizationButton';
-import { PanelOptionsChangedEvent, ShowModalReactEvent } from 'app/types/events';
-import { locationService } from '@grafana/runtime';
-import { UnlinkModal } from '../../../library-panels/components/UnlinkModal/UnlinkModal';
+import { appEvents } from 'app/core/core';
+import { SubMenuItems } from 'app/features/dashboard/components/SubMenu/SubMenuItems';
 import { SaveLibraryPanelModal } from 'app/features/library-panels/components/SaveLibraryPanelModal/SaveLibraryPanelModal';
+import { PanelModelWithLibraryPanel } from 'app/features/library-panels/types';
+import { getPanelStateForModel } from 'app/features/panel/state/selectors';
+import { updateTimeZoneForSession } from 'app/features/profile/state/reducers';
+import { StoreState } from 'app/types';
+import { PanelOptionsChangedEvent, ShowModalReactEvent } from 'app/types/events';
+
+import { notifyApp } from '../../../../core/actions';
+import { UnlinkModal } from '../../../library-panels/components/UnlinkModal/UnlinkModal';
 import { isPanelModelLibraryPanel } from '../../../library-panels/guard';
 import { getLibraryPanelConnectedDashboards } from '../../../library-panels/state/api';
 import {
@@ -52,9 +37,21 @@ import {
   createPanelLibrarySuccessNotification,
   saveAndRefreshLibraryPanel,
 } from '../../../library-panels/utils';
-import { notifyApp } from '../../../../core/actions';
+import { getVariablesByKey } from '../../../variables/state/selectors';
+import { DashboardPanel } from '../../dashgrid/DashboardPanel';
+import { DashboardModel, PanelModel } from '../../state';
+import { DashNavTimeControls } from '../DashNav/DashNavTimeControls';
+import { SaveDashboardDrawer } from '../SaveDashboard/SaveDashboardDrawer';
+
+import { OptionsPane } from './OptionsPane';
 import { PanelEditorTableView } from './PanelEditorTableView';
-import { PanelModelWithLibraryPanel } from 'app/features/library-panels/types';
+import { PanelEditorTabs } from './PanelEditorTabs';
+import { VisualizationButton } from './VisualizationButton';
+import { discardPanelChanges, initPanelEditor, updatePanelEditorUIState } from './state/actions';
+import { toggleTableView } from './state/reducers';
+import { getPanelEditorTabs } from './state/selectors';
+import { DisplayMode, displayModes, PanelEditorTab } from './types';
+import { calculatePanelSize } from './utils';
 
 interface OwnProps {
   dashboard: DashboardModel;
@@ -62,17 +59,18 @@ interface OwnProps {
   tab?: string;
 }
 
-const mapStateToProps = (state: StoreState) => {
+const mapStateToProps = (state: StoreState, ownProps: OwnProps) => {
   const panel = state.panelEditor.getPanel();
-  const { plugin } = getPanelStateById(state.dashboard, panel.id);
+  const panelState = getPanelStateForModel(state, panel);
 
   return {
-    plugin: plugin,
     panel,
+    plugin: panelState?.plugin,
+    instanceState: panelState?.instanceState,
     initDone: state.panelEditor.initDone,
     uiState: state.panelEditor.ui,
     tableViewEnabled: state.panelEditor.tableViewEnabled,
-    variables: getVariables(state),
+    variables: getVariablesByKey(ownProps.dashboard.uid, state),
   };
 };
 
@@ -87,7 +85,7 @@ const mapDispatchToProps = {
 
 const connector = connect(mapStateToProps, mapDispatchToProps);
 
-type Props = OwnProps & ConnectedProps<typeof connector>;
+type Props = OwnProps & ConnectedProps<typeof connector> & Themeable2;
 
 interface State {
   showSaveLibraryPanelModal?: boolean;
@@ -126,6 +124,7 @@ export class PanelEditorUnconnected extends PureComponent<Props> {
     locationService.partial({
       editPanel: null,
       tab: null,
+      showCategory: null,
     });
   };
 
@@ -143,7 +142,7 @@ export class PanelEditorUnconnected extends PureComponent<Props> {
   onSaveDashboard = () => {
     appEvents.publish(
       new ShowModalReactEvent({
-        component: SaveDashboardModalProxy,
+        component: SaveDashboardDrawer,
         props: { dashboard: this.props.dashboard },
       })
     );
@@ -164,7 +163,9 @@ export class PanelEditorUnconnected extends PureComponent<Props> {
         await saveAndRefreshLibraryPanel(this.props.panel, this.props.dashboard.meta.folderId!);
         this.props.notifyApp(createPanelLibrarySuccessNotification('Library panel saved'));
       } catch (err) {
-        this.props.notifyApp(createPanelLibraryErrorNotification(`Error saving library panel: "${err.statusText}"`));
+        if (isFetchError(err)) {
+          this.props.notifyApp(createPanelLibraryErrorNotification(`Error saving library panel: "${err.statusText}"`));
+        }
       }
       return;
     }
@@ -217,8 +218,8 @@ export class PanelEditorUnconnected extends PureComponent<Props> {
     updatePanelEditorUIState({ isPanelOptionsVisible: !uiState.isPanelOptionsVisible });
   };
 
-  renderPanel(styles: EditorStyles, noTabsBelow: boolean) {
-    const { dashboard, panel, uiState, tableViewEnabled } = this.props;
+  renderPanel(styles: EditorStyles, isOnlyPanel: boolean) {
+    const { dashboard, panel, uiState, tableViewEnabled, theme } = this.props;
 
     return (
       <div className={styles.mainPaneWrapper} key="panel">
@@ -231,8 +232,8 @@ export class PanelEditorUnconnected extends PureComponent<Props> {
               }
 
               // If no tabs limit height so panel does not extend to edge
-              if (noTabsBelow) {
-                height -= config.theme2.spacing.gridSize * 2;
+              if (isOnlyPanel) {
+                height -= theme.spacing.gridSize * 2;
               }
 
               if (tableViewEnabled) {
@@ -243,13 +244,15 @@ export class PanelEditorUnconnected extends PureComponent<Props> {
 
               return (
                 <div className={styles.centeringContainer} style={{ width, height }}>
-                  <div style={panelSize} data-panelid={panel.editSourceId}>
+                  <div style={panelSize} data-panelid={panel.id}>
                     <DashboardPanel
+                      key={panel.key}
+                      stateKey={panel.key}
                       dashboard={dashboard}
                       panel={panel}
                       isEditing={true}
                       isViewing={false}
-                      isInView={true}
+                      lazy={false}
                       width={panelSize.width}
                       height={panelSize.height}
                     />
@@ -266,21 +269,29 @@ export class PanelEditorUnconnected extends PureComponent<Props> {
   renderPanelAndEditor(styles: EditorStyles) {
     const { panel, dashboard, plugin, tab } = this.props;
     const tabs = getPanelEditorTabs(tab, plugin);
+    const isOnlyPanel = tabs.length === 0;
+    const panelPane = this.renderPanel(styles, isOnlyPanel);
 
-    if (tabs.length > 0) {
-      return [
-        this.renderPanel(styles, false),
-        <div
-          className={styles.tabsWrapper}
-          aria-label={selectors.components.PanelEditor.DataPane.content}
-          key="panel-editor-tabs"
-        >
-          <PanelEditorTabs panel={panel} dashboard={dashboard} tabs={tabs} onChangeTab={this.onChangeTab} />
-        </div>,
-      ];
+    if (tabs.length === 0) {
+      return panelPane;
     }
 
-    return this.renderPanel(styles, true);
+    return [
+      panelPane,
+      <div
+        className={styles.tabsWrapper}
+        aria-label={selectors.components.PanelEditor.DataPane.content}
+        key="panel-editor-tabs"
+      >
+        <PanelEditorTabs
+          key={panel.key}
+          panel={panel}
+          dashboard={dashboard}
+          tabs={tabs}
+          onChangeTab={this.onChangeTab}
+        />
+      </div>,
+    ];
   }
 
   renderTemplateVariables(styles: EditorStyles) {
@@ -395,12 +406,7 @@ export class PanelEditorUnconnected extends PureComponent<Props> {
   }
 
   renderOptionsPane() {
-    const { plugin, dashboard, panel, uiState } = this.props;
-
-    const rightPaneSize =
-      uiState.rightPaneSize <= 1
-        ? (uiState.rightPaneSize as number) * window.innerWidth
-        : (uiState.rightPaneSize as number);
+    const { plugin, dashboard, panel, instanceState } = this.props;
 
     if (!plugin) {
       return <div />;
@@ -411,7 +417,7 @@ export class PanelEditorUnconnected extends PureComponent<Props> {
         plugin={plugin}
         dashboard={dashboard}
         panel={panel}
-        width={rightPaneSize}
+        instanceState={instanceState}
         onFieldConfigsChange={this.onFieldConfigChange}
         onPanelOptionsChanged={this.onPanelOptionsChanged}
         onPanelConfigChange={this.onPanelConfigChanged}
@@ -420,7 +426,7 @@ export class PanelEditorUnconnected extends PureComponent<Props> {
   }
 
   onGoBackToDashboard = () => {
-    locationService.partial({ editPanel: null, tab: null });
+    locationService.partial({ editPanel: null, tab: null, showCategory: null });
   };
 
   onConfirmAndDismissLibarayPanelModel = () => {
@@ -428,8 +434,8 @@ export class PanelEditorUnconnected extends PureComponent<Props> {
   };
 
   render() {
-    const { dashboard, initDone, updatePanelEditorUIState, uiState } = this.props;
-    const styles = getStyles(config.theme, this.props);
+    const { dashboard, initDone, updatePanelEditorUIState, uiState, theme } = this.props;
+    const styles = getStyles(theme, this.props);
 
     if (!initDone) {
       return null;
@@ -437,7 +443,7 @@ export class PanelEditorUnconnected extends PureComponent<Props> {
 
     return (
       <div className={styles.wrapper} aria-label={selectors.components.PanelEditor.General.content}>
-        <PageToolbar title={`${dashboard.title} / Edit Panel`} onGoBack={this.onGoBackToDashboard}>
+        <PageToolbar title={dashboard.title} section="Edit Panel" onGoBack={this.onGoBackToDashboard}>
           {this.renderEditorActions()}
         </PageToolbar>
         <div className={styles.verticalSplitPanesWrapper}>
@@ -463,14 +469,14 @@ export class PanelEditorUnconnected extends PureComponent<Props> {
   }
 }
 
-export const PanelEditor = connector(PanelEditorUnconnected);
+export const PanelEditor = withTheme2(connector(PanelEditorUnconnected));
 
 /*
  * Styles
  */
-export const getStyles = stylesFactory((theme: GrafanaTheme, props: Props) => {
+export const getStyles = stylesFactory((theme: GrafanaTheme2, props: Props) => {
   const { uiState } = props;
-  const paneSpacing = theme.spacing.md;
+  const paneSpacing = theme.spacing(2);
 
   return {
     wrapper: css`
@@ -482,7 +488,7 @@ export const getStyles = stylesFactory((theme: GrafanaTheme, props: Props) => {
       left: 0;
       right: 0;
       bottom: 0;
-      background: ${theme.colors.dashboardBg};
+      background: ${theme.colors.background.canvas};
       display: flex;
       flex-direction: column;
     `,
@@ -505,13 +511,13 @@ export const getStyles = stylesFactory((theme: GrafanaTheme, props: Props) => {
       display: flex;
       flex-grow: 1;
       flex-wrap: wrap;
+      gap: ${theme.spacing(1, 2)};
     `,
     panelWrapper: css`
       flex: 1 1 0;
       min-height: 0;
       width: 100%;
       padding-left: ${paneSpacing};
-      padding-right: 2px;
     `,
     tabsWrapper: css`
       height: 100%;
@@ -524,13 +530,14 @@ export const getStyles = stylesFactory((theme: GrafanaTheme, props: Props) => {
       flex-wrap: wrap;
     `,
     toolbarLeft: css`
-      padding-left: ${theme.spacing.sm};
+      padding-left: ${theme.spacing(1)};
     `,
     centeringContainer: css`
       display: flex;
       justify-content: center;
       align-items: center;
       position: relative;
+      flex-direction: column;
     `,
   };
 });

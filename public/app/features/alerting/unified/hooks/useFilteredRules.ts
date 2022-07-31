@@ -1,22 +1,20 @@
 import { useMemo } from 'react';
 
-import { CombinedRuleGroup, CombinedRuleNamespace, FilterState } from 'app/types/unified-alerting';
-import { isCloudRulesSource } from '../utils/datasource';
-import { isAlertingRule, isGrafanaRulerRule } from '../utils/rules';
-import { getFiltersFromUrlParams } from '../utils/misc';
-import { useQueryParams } from 'app/core/hooks/useQueryParams';
-import { PromRuleType, RulerGrafanaRuleDTO } from 'app/types/unified-alerting-dto';
 import { getDataSourceSrv } from '@grafana/runtime';
+import { useQueryParams } from 'app/core/hooks/useQueryParams';
+import { CombinedRuleGroup, CombinedRuleNamespace, FilterState } from 'app/types/unified-alerting';
+import { PromRuleType, RulerGrafanaRuleDTO } from 'app/types/unified-alerting-dto';
+
 import { labelsMatchMatchers, parseMatchers } from '../utils/alertmanager';
+import { isCloudRulesSource } from '../utils/datasource';
+import { getFiltersFromUrlParams } from '../utils/misc';
+import { isAlertingRule, isGrafanaRulerRule } from '../utils/rules';
 
 export const useFilteredRules = (namespaces: CombinedRuleNamespace[]) => {
   const [queryParams] = useQueryParams();
   const filters = getFiltersFromUrlParams(queryParams);
 
   return useMemo(() => {
-    if (!filters.queryString && !filters.dataSource && !filters.alertState) {
-      return namespaces;
-    }
     const filteredNamespaces = namespaces
       // Filter by data source
       // TODO: filter by multiple data sources for grafana-managed alerts
@@ -48,6 +46,9 @@ const reduceNamespaces = (filters: FilterState) => {
 const reduceGroups = (filters: FilterState) => {
   return (groupAcc: CombinedRuleGroup[], group: CombinedRuleGroup) => {
     const rules = group.rules.filter((rule) => {
+      if (filters.ruleType && filters.ruleType !== rule.promRule?.type) {
+        return false;
+      }
       if (filters.dataSource && isGrafanaRulerRule(rule.rulerRule) && !isQueryingDataSource(rule.rulerRule, filters)) {
         return false;
       }

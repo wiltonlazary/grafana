@@ -9,9 +9,9 @@ import (
 	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/setting"
 
+	"github.com/grafana/grafana/pkg/web"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/macaron.v1"
 )
 
 type execFunc func() *httptest.ResponseRecorder
@@ -25,15 +25,15 @@ func rateLimiterScenario(t *testing.T, desc string, rps int, burst int, fn rateL
 		defaultHandler := func(c *models.ReqContext) {
 			resp := make(map[string]interface{})
 			resp["message"] = "OK"
-			c.JSON(200, resp)
+			c.JSON(http.StatusOK, resp)
 		}
 		currentTime := time.Now()
 
 		cfg := setting.NewCfg()
 
-		m := macaron.New()
-		m.UseMiddleware(macaron.Renderer("../../public/views", "[[", "]]"))
-		m.Use(getContextHandler(t, cfg).Middleware)
+		m := web.New()
+		m.UseMiddleware(web.Renderer("../../public/views", "[[", "]]"))
+		m.Use(getContextHandler(t, cfg, nil, nil).Middleware)
 		m.Get("/foo", RateLimit(rps, burst, func() time.Time { return currentTime }), defaultHandler)
 
 		fn(func() *httptest.ResponseRecorder {

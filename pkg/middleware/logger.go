@@ -17,23 +17,25 @@ package middleware
 
 import (
 	"net/http"
+	"net/url"
 	"time"
 
+	"github.com/grafana/grafana/pkg/infra/tracing"
+	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/contexthandler"
 	"github.com/grafana/grafana/pkg/setting"
-	cw "github.com/weaveworks/common/middleware"
-	"gopkg.in/macaron.v1"
+	"github.com/grafana/grafana/pkg/web"
 )
 
-func Logger(cfg *setting.Cfg) macaron.Handler {
-	return func(res http.ResponseWriter, req *http.Request, c *macaron.Context) {
+func Logger(cfg *setting.Cfg) web.Handler {
+	return func(res http.ResponseWriter, req *http.Request, c *web.Context) {
 		start := time.Now()
 
-		rw := res.(macaron.ResponseWriter)
+		rw := res.(web.ResponseWriter)
 		c.Next()
 
 		timeTaken := time.Since(start) / time.Millisecond
-
+		duration := time.Since(start).String()
 		ctx := contexthandler.FromContext(c.Req.Context())
 		if ctx != nil && ctx.PerfmonTimer != nil {
 			ctx.PerfmonTimer.Observe(float64(timeTaken))
@@ -53,12 +55,13 @@ func Logger(cfg *setting.Cfg) macaron.Handler {
 				"status", status,
 				"remote_addr", c.RemoteAddr(),
 				"time_ms", int64(timeTaken),
+				"duration", duration,
 				"size", rw.Size(),
-				"referer", req.Referer(),
+				"referer", SanitizeURL(ctx, req.Referer()),
 			}
 
-			traceID, exist := cw.ExtractTraceID(ctx.Req.Context())
-			if exist {
+			traceID := tracing.TraceIDFromContext(ctx.Req.Context(), false)
+			if traceID != "" {
 				logParams = append(logParams, "traceID", traceID)
 			}
 
@@ -69,4 +72,29 @@ func Logger(cfg *setting.Cfg) macaron.Handler {
 			}
 		}
 	}
+}
+
+var sensitiveQueryStrings = [...]string{
+	"auth_token",
+}
+
+func SanitizeURL(ctx *models.ReqContext, s string) string {
+	if s == "" {
+		return s
+	}
+
+	u, err := url.ParseRequestURI(s)
+	if err != nil {
+		ctx.Logger.Warn("Received invalid referer in request headers, removed for log forgery prevention")
+		return ""
+	}
+
+	// strip out sensitive query strings
+	values := u.Query()
+	for _, query := range sensitiveQueryStrings {
+		values.Del(query)
+	}
+	u.RawQuery = values.Encode()
+
+	return u.String()
 }

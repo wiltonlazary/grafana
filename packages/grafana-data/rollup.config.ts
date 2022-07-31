@@ -1,7 +1,8 @@
-import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
-import sourceMaps from 'rollup-plugin-sourcemaps';
 import json from '@rollup/plugin-json';
+import resolve from '@rollup/plugin-node-resolve';
+import path from 'path';
+import sourceMaps from 'rollup-plugin-sourcemaps';
 import { terser } from 'rollup-plugin-terser';
 
 const pkg = require('./package.json');
@@ -27,8 +28,9 @@ const buildCjsPackage = ({ env }) => {
       '@grafana/schema', // Load from host
     ],
     plugins: [
+      resolve(),
       json({
-        include: ['../../node_modules/moment-timezone/data/packed/latest.json'],
+        include: [path.relative('.', require.resolve('moment-timezone/data/packed/latest.json'))], // absolute path throws an error for whatever reason
       }),
       commonjs({
         include: /node_modules/,

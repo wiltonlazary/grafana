@@ -10,6 +10,7 @@ import {
   TooltipDisplayMode,
   GraphGradientMode,
   HideableFieldConfig,
+  SortOrder,
 } from '@grafana/schema';
 
 export const modelVersion = Object.freeze([1, 0]);
@@ -24,11 +25,13 @@ export const defaultPanelOptions: PanelOptions = {
   bucketOffset: 0,
   legend: {
     displayMode: LegendDisplayMode.List,
+    showLegend: true,
     placement: 'bottom',
     calcs: [],
   },
   tooltip: {
     mode: TooltipDisplayMode.Multi,
+    sort: SortOrder.None,
   },
 };
 

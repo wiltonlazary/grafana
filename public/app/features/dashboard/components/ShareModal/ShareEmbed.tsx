@@ -1,8 +1,10 @@
 import React, { FormEvent, PureComponent } from 'react';
-import { RadioButtonGroup, Switch, Field, TextArea, ClipboardButton, Modal } from '@grafana/ui';
-import { SelectableValue, AppEvents } from '@grafana/data';
-import { DashboardModel, PanelModel } from 'app/features/dashboard/state';
-import { appEvents } from 'app/core/core';
+
+import { SelectableValue } from '@grafana/data';
+import { reportInteraction } from '@grafana/runtime/src';
+import { ClipboardButton, Field, Modal, RadioButtonGroup, Switch, TextArea } from '@grafana/ui';
+
+import { ShareModalTabProps } from './types';
 import { buildIframeHtml } from './utils';
 
 const themeOptions: Array<SelectableValue<string>> = [
@@ -11,10 +13,7 @@ const themeOptions: Array<SelectableValue<string>> = [
   { label: 'Light', value: 'light' },
 ];
 
-interface Props {
-  dashboard: DashboardModel;
-  panel?: PanelModel;
-}
+interface Props extends ShareModalTabProps {}
 
 interface State {
   useCurrentTimeRange: boolean;
@@ -33,14 +32,15 @@ export class ShareEmbed extends PureComponent<Props, State> {
   }
 
   componentDidMount() {
+    reportInteraction('grafana_dashboards_embed_share_viewed');
     this.buildIframeHtml();
   }
 
   buildIframeHtml = () => {
-    const { panel } = this.props;
+    const { panel, dashboard } = this.props;
     const { useCurrentTimeRange, selectedTheme } = this.state;
 
-    const iframeHtml = buildIframeHtml(useCurrentTimeRange, selectedTheme, panel);
+    const iframeHtml = buildIframeHtml(useCurrentTimeRange, dashboard.uid, selectedTheme, panel);
     this.setState({ iframeHtml });
   };
 
@@ -59,10 +59,6 @@ export class ShareEmbed extends PureComponent<Props, State> {
 
   onThemeChange = (value: string) => {
     this.setState({ selectedTheme: value }, this.buildIframeHtml);
-  };
-
-  onIframeHtmlCopy = () => {
-    appEvents.emit(AppEvents.alertSuccess, ['Content copied to clipboard']);
   };
 
   getIframeHtml = () => {
@@ -91,13 +87,19 @@ export class ShareEmbed extends PureComponent<Props, State> {
         </Field>
         <Field
           label="Embed HTML"
-          description="The HTML code below can be pasted and included in another web page. Unless anonymous access is enabled, 
+          description="The HTML code below can be pasted and included in another web page. Unless anonymous access is enabled,
                 the user viewing that page need to be signed into Grafana for the graph to load."
         >
-          <TextArea rows={5} value={iframeHtml} onChange={this.onIframeHtmlChange}></TextArea>
+          <TextArea
+            data-testid="share-embed-html"
+            id="share-panel-embed-embed-html-textarea"
+            rows={5}
+            value={iframeHtml}
+            onChange={this.onIframeHtmlChange}
+          />
         </Field>
         <Modal.ButtonRow>
-          <ClipboardButton variant="primary" getText={this.getIframeHtml} onClipboardCopy={this.onIframeHtmlCopy}>
+          <ClipboardButton icon="copy" variant="primary" getText={this.getIframeHtml}>
             Copy to clipboard
           </ClipboardButton>
         </Modal.ButtonRow>

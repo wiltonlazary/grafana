@@ -1,9 +1,11 @@
 package alerting
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/grafana/grafana/pkg/models"
+	"github.com/grafana/grafana/pkg/services/datasources"
 )
 
 // DatasourceAlertUsage is a hash where the key represents the
@@ -20,19 +22,19 @@ type UsageStats struct {
 // UsageStatsQuerier returns usage stats about alert rules
 // configured in Grafana.
 type UsageStatsQuerier interface {
-	QueryUsageStats() (*UsageStats, error)
+	QueryUsageStats(context.Context) (*UsageStats, error)
 }
 
 // QueryUsageStats returns usage stats about alert rules
 // configured in Grafana.
-func (e *AlertEngine) QueryUsageStats() (*UsageStats, error) {
+func (e *AlertEngine) QueryUsageStats(ctx context.Context) (*UsageStats, error) {
 	cmd := &models.GetAllAlertsQuery{}
-	err := e.Bus.Dispatch(cmd)
+	err := e.sqlStore.GetAllAlertQueryHandler(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}
 
-	dsUsage, err := e.mapRulesToUsageStats(cmd.Result)
+	dsUsage, err := e.mapRulesToUsageStats(ctx, cmd.Result)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +44,7 @@ func (e *AlertEngine) QueryUsageStats() (*UsageStats, error) {
 	}, nil
 }
 
-func (e *AlertEngine) mapRulesToUsageStats(rules []*models.Alert) (DatasourceAlertUsage, error) {
+func (e *AlertEngine) mapRulesToUsageStats(ctx context.Context, rules []*models.Alert) (DatasourceAlertUsage, error) {
 	// map of datasourceId type and frequency
 	typeCount := map[int64]int{}
 	for _, a := range rules {
@@ -61,8 +63,8 @@ func (e *AlertEngine) mapRulesToUsageStats(rules []*models.Alert) (DatasourceAle
 	// map of datsource types and frequency
 	result := map[string]int{}
 	for k, v := range typeCount {
-		query := &models.GetDataSourceQuery{Id: k}
-		err := e.Bus.Dispatch(query)
+		query := &datasources.GetDataSourceQuery{Id: k}
+		err := e.sqlStore.GetDataSource(ctx, query)
 		if err != nil {
 			return map[string]int{}, nil
 		}

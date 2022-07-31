@@ -1,11 +1,20 @@
+import { FormField } from './FormField/FormField';
+import { Input, LegacyInputStatus } from './Forms/Legacy/Input/Input';
+import { IndicatorsContainer } from './Forms/Legacy/Select/IndicatorsContainer';
+import { NoOptionsMessage } from './Forms/Legacy/Select/NoOptionsMessage';
+import { AsyncSelect, Select } from './Forms/Legacy/Select/Select';
+import { Switch } from './Forms/Legacy/Switch/Switch';
+import { SecretFormField } from './SecretFormField/SecretFormField';
+
 export { Icon } from './Icon/Icon';
 export { IconButton, IconButtonVariant } from './IconButton/IconButton';
 export { ConfirmButton } from './ConfirmButton/ConfirmButton';
 export { DeleteButton } from './ConfirmButton/DeleteButton';
-export { Tooltip, PopoverContent } from './Tooltip/Tooltip';
+export { Tooltip } from './Tooltip/Tooltip';
+export { PopoverContent } from './Tooltip/types';
 export { PopoverController } from './Tooltip/PopoverController';
 export { Popover } from './Tooltip/Popover';
-export { Portal } from './Portal/Portal';
+export { Portal, getPortalContainer, PortalContainer } from './Portal/Portal';
 export { CustomScrollbar, ScrollbarPosition } from './CustomScrollbar/CustomScrollbar';
 export { TabbedContainer, TabConfig } from './TabbedContainer/TabbedContainer';
 
@@ -15,7 +24,7 @@ export { ButtonCascader } from './ButtonCascader/ButtonCascader';
 
 export { LoadingPlaceholder, LoadingPlaceholderProps } from './LoadingPlaceholder/LoadingPlaceholder';
 export { ColorPicker, SeriesColorPicker } from './ColorPicker/ColorPicker';
-export { ColorValueEditor, ColorValueEditorProps } from './OptionsUI/color';
+export { ColorPickerInput } from './ColorPicker/ColorPickerInput';
 export { SeriesColorPickerPopover, SeriesColorPickerPopoverWithTheme } from './ColorPicker/SeriesColorPickerPopover';
 export { EmptySearchResult } from './EmptySearchResult/EmptySearchResult';
 export { UnitPicker } from './UnitPicker/UnitPicker';
@@ -24,6 +33,7 @@ export { RefreshPicker, defaultIntervals } from './RefreshPicker/RefreshPicker';
 export { TimeRangePicker, TimeRangePickerProps } from './DateTimePickers/TimeRangePicker';
 export { TimeOfDayPicker } from './DateTimePickers/TimeOfDayPicker';
 export { TimeZonePicker } from './DateTimePickers/TimeZonePicker';
+export { WeekStartPicker } from './DateTimePickers/WeekStartPicker';
 export { DatePicker, DatePickerProps } from './DateTimePickers/DatePicker/DatePicker';
 export {
   DatePickerWithInput,
@@ -40,8 +50,10 @@ export { FilterPill } from './FilterPill/FilterPill';
 export { ConfirmModal, ConfirmModalProps } from './ConfirmModal/ConfirmModal';
 export { QueryField } from './QueryField/QueryField';
 
-// Code editor
-export { CodeEditor } from './Monaco/CodeEditorLazy';
+export { CodeEditor } from './Monaco/CodeEditor';
+
+export { ReactMonacoEditorLazy as ReactMonacoEditor } from './Monaco/ReactMonacoEditorLazy';
+
 export {
   Monaco,
   monacoTypes,
@@ -57,7 +69,7 @@ export { Modal } from './Modal/Modal';
 export { ModalHeader } from './Modal/ModalHeader';
 export { ModalTabsHeader } from './Modal/ModalTabsHeader';
 export { ModalTabContent } from './Modal/ModalTabContent';
-export { ModalsProvider, ModalRoot, ModalsController } from './Modal/ModalsContext';
+export { ModalsProvider, ModalRoot, ModalsController, ModalsContext } from './Modal/ModalsContext';
 export { PageToolbar } from './PageLayout/PageToolbar';
 
 // Renderless
@@ -68,6 +80,7 @@ export { TableCellDisplayMode, TableSortByFieldState } from './Table/types';
 export { TableInputCSV } from './TableInputCSV/TableInputCSV';
 export { TabsBar } from './Tabs/TabsBar';
 export { Tab } from './Tabs/Tab';
+export { VerticalTab } from './Tabs/VerticalTab';
 export { TabContent } from './Tabs/TabContent';
 export { Counter } from './Tabs/Counter';
 
@@ -79,6 +92,7 @@ export {
   BigValueJustifyMode,
   BigValueTextMode,
 } from './BigValue/BigValue';
+export { Sparkline } from './Sparkline/Sparkline';
 
 export { Gauge } from './Gauge/Gauge';
 export { Graph } from './Graph/Graph';
@@ -162,21 +176,14 @@ export { Drawer } from './Drawer/Drawer';
 export { Slider } from './Slider/Slider';
 export { RangeSlider } from './Slider/RangeSlider';
 
-// TODO: namespace!!
-export { StringValueEditor } from './OptionsUI/string';
-export { StringArrayEditor } from './OptionsUI/strings';
-export { NumberValueEditor } from './OptionsUI/number';
-export { SliderValueEditor } from './OptionsUI/slider';
-export { SelectValueEditor } from './OptionsUI/select';
-export { MultiSelectValueEditor } from './OptionsUI/multiSelect';
-
 // Next-gen forms
 export { Form } from './Forms/Form';
+export { sharedInputStyle } from './Forms/commonStyles';
 export { InputControl } from './InputControl';
-export { Button, LinkButton, ButtonVariant, ToolbarButton, ButtonGroup, ToolbarButtonRow } from './Button';
+export { Button, LinkButton, ButtonVariant, ButtonGroup, ButtonProps } from './Button';
+export { ToolbarButton, ToolbarButtonRow } from './ToolbarButton';
 export { ValuePicker } from './ValuePicker/ValuePicker';
 export { fieldMatchersUI } from './MatchersUI/fieldMatchersUI';
-export { getFormStyles } from './Forms/getFormStyles';
 export { Link } from './Link/Link';
 
 export { Label } from './Forms/Label';
@@ -190,16 +197,24 @@ export { InlineLabel } from './Forms/InlineLabel';
 export { InlineFieldRow } from './Forms/InlineFieldRow';
 export { FieldArray } from './Forms/FieldArray';
 
+// Select
 export { default as resetSelectStyles } from './Select/resetSelectStyles';
-export { selectOptionInTest } from './Select/test-utils';
 export * from './Select/Select';
+export { DropdownIndicator } from './Select/DropdownIndicator';
+export { getSelectStyles } from './Select/getSelectStyles';
+export * from './Select/types';
 
 export { HorizontalGroup, VerticalGroup, Container } from './Layout/Layout';
 export { Badge, BadgeColor, BadgeProps } from './Badge/Badge';
 export { RadioButtonGroup } from './Forms/RadioButtonGroup/RadioButtonGroup';
+export { RadioButtonList } from './Forms/RadioButtonList/RadioButtonList';
 
-export { Input } from './Input/Input';
+export { Input, getInputStyles } from './Input/Input';
+export { AutoSizeInput } from './Input/AutoSizeInput';
+export { FilterInput } from './FilterInput/FilterInput';
 export { FormInputSize } from './Forms/types';
+export * from './SecretInput';
+export * from './SecretTextArea';
 
 export { Switch, InlineSwitch } from './Switch/Switch';
 export { Checkbox } from './Forms/Checkbox';
@@ -212,24 +227,12 @@ export { RelativeTimeRangePicker } from './DateTimePickers/RelativeTimeRangePick
 export { Card, Props as CardProps, getCardStyles } from './Card/Card';
 export { CardContainer, CardContainerProps } from './Card/CardContainer';
 export { FormattedValueDisplay } from './FormattedValueDisplay/FormattedValueDisplay';
-
 export { ButtonSelect } from './Dropdown/ButtonSelect';
+export { Dropdown } from './Dropdown/Dropdown';
 export { PluginSignatureBadge, PluginSignatureBadgeProps } from './PluginSignatureBadge/PluginSignatureBadge';
 
 // Export this until we've figured out a good approach to inline form styles.
 export { InlineFormLabel } from './FormLabel/FormLabel';
-
-// Select
-import { AsyncSelect, Select } from './Forms/Legacy/Select/Select';
-import { IndicatorsContainer } from './Forms/Legacy/Select/IndicatorsContainer';
-import { NoOptionsMessage } from './Forms/Legacy/Select/NoOptionsMessage';
-
-//Input
-import { Input, LegacyInputStatus } from './Forms/Legacy/Input/Input';
-import { FormField } from './FormField/FormField';
-import { SecretFormField } from './SecretFormField/SecretFormField';
-
-import { Switch } from './Forms/Legacy/Switch/Switch';
 
 const LegacyForms = {
   SecretFormField,
@@ -245,17 +248,22 @@ export { LegacyForms, LegacyInputStatus };
 
 // WIP, need renames and exports cleanup
 export * from './uPlot/config';
-export { UPlotConfigBuilder, UPlotConfigPrepFn } from './uPlot/config/UPlotConfigBuilder';
+export { ScaleDistribution } from '@grafana/schema';
+export { UPlotConfigBuilder } from './uPlot/config/UPlotConfigBuilder';
+export { UPLOT_AXIS_FONT_SIZE } from './uPlot/config/UPlotAxisBuilder';
 export { UPlotChart } from './uPlot/Plot';
 export { PlotLegend } from './uPlot/PlotLegend';
 export * from './uPlot/geometries';
 export * from './uPlot/plugins';
 export { PlotTooltipInterpolator, PlotSelection } from './uPlot/types';
+export { UPlotConfigPrepFn } from './uPlot/config/UPlotConfigBuilder';
 export { GraphNG, GraphNGProps, FIXED_UNIT } from './GraphNG/GraphNG';
 export { TimeSeries } from './TimeSeries/TimeSeries';
 export { useGraphNGContext } from './GraphNG/hooks';
-export { preparePlotFrame } from './GraphNG/utils';
+export { preparePlotFrame, buildScaleKey } from './GraphNG/utils';
 export { GraphNGLegendEvent } from './GraphNG/types';
 export * from './PanelChrome/types';
 export { EmotionPerfTest } from './ThemeDemos/EmotionPerfTest';
 export { Label as BrowserLabel } from './BrowserLabel/Label';
+export { PanelContainer } from './PanelContainer/PanelContainer';
+export * from './QueryEditor';

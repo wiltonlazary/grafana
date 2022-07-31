@@ -1,4 +1,5 @@
 import React from 'react';
+
 import { GlobalStyles, useTheme2 } from '../../themes';
 import { RenderFunction } from '../../types';
 
@@ -11,7 +12,7 @@ const PaddedStory: React.FunctionComponent<{}> = ({ children }) => {
         width: '100%',
         padding: '20px',
         display: 'flex',
-        minHeight: '80vh',
+        minHeight: '100%',
         background: `${theme.colors.background.primary}`,
       }}
     >

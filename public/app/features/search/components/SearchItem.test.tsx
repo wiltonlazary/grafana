@@ -1,7 +1,11 @@
+import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { SearchItem, Props } from './SearchItem';
+
+import { selectors } from '@grafana/e2e-selectors';
+
 import { DashboardSearchItemType } from '../types';
+
+import { Props, SearchItem } from './SearchItem';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -35,7 +39,7 @@ const setup = (propOverrides?: Partial<Props>) => {
 describe('SearchItem', () => {
   it('should render the item', () => {
     setup();
-    expect(screen.getAllByLabelText('Dashboard search item Test 1')).toHaveLength(1);
+    expect(screen.getAllByTestId(selectors.components.Search.dashboardItem('Test 1'))).toHaveLength(1);
     expect(screen.getAllByText('Test 1')).toHaveLength(1);
   });
 

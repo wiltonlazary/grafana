@@ -1,12 +1,14 @@
 import React, { useCallback } from 'react';
 import { connect } from 'react-redux';
-import { Form, Button, Input, Field } from '@grafana/ui';
+import { useHistory } from 'react-router-dom';
+
 import { NavModel } from '@grafana/data';
 import { getBackendSrv } from '@grafana/runtime';
-import { StoreState } from '../../types';
+import { Form, Button, Input, Field } from '@grafana/ui';
+import { Page } from 'app/core/components/Page/Page';
+
 import { getNavModel } from '../../core/selectors/navModel';
-import Page from 'app/core/components/Page/Page';
-import { useHistory } from 'react-router-dom';
+import { StoreState } from '../../types';
 
 interface UserCreatePageProps {
   navModel: NavModel;
@@ -45,15 +47,15 @@ const UserCreatePage: React.FC<UserCreatePageProps> = ({ navModel }) => {
                   invalid={!!errors.name}
                   error={errors.name ? 'Name is required' : undefined}
                 >
-                  <Input {...register('name', { required: true })} />
+                  <Input id="name-input" {...register('name', { required: true })} />
                 </Field>
 
                 <Field label="Email">
-                  <Input {...register('email')} />
+                  <Input id="email-input" {...register('email')} />
                 </Field>
 
                 <Field label="Username">
-                  <Input {...register('login')} />
+                  <Input id="username-input" {...register('login')} />
                 </Field>
                 <Field
                   label="Password"
@@ -62,6 +64,7 @@ const UserCreatePage: React.FC<UserCreatePageProps> = ({ navModel }) => {
                   error={errors.password ? 'Password is required and must contain at least 4 characters' : undefined}
                 >
                   <Input
+                    id="password-input"
                     {...register('password', {
                       validate: (value) => value.trim() !== '' && value.length >= 4,
                     })}

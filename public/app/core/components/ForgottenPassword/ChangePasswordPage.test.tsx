@@ -1,6 +1,7 @@
-import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import React from 'react';
+
 import { getRouteComponentProps } from 'app/core/navigation/__mocks__/routeProps';
 
 import { ChangePasswordPage, Props } from './ChangePasswordPage';
@@ -10,25 +11,22 @@ jest.mock('@grafana/runtime', () => ({
   getBackendSrv: () => ({
     post: postMock,
   }),
-}));
-
-jest.mock('app/core/config', () => {
-  return {
+  config: {
     loginError: false,
     buildInfo: {
       version: 'v1.0',
       commit: '1',
       env: 'production',
       edition: 'Open Source',
-      isEnterprise: false,
     },
     licenseInfo: {
       stateInfo: '',
       licenseUrl: '',
     },
     appSubUrl: '',
-  };
-});
+  },
+}));
+
 const props: Props = {
   ...getRouteComponentProps({
     queryParams: { code: 'some code' },
@@ -51,14 +49,12 @@ describe('ChangePassword Page', () => {
     expect(await screen.findByText('New Password is required')).toBeInTheDocument();
     expect(screen.getByText('Confirmed Password is required')).toBeInTheDocument();
 
-    await act(async () => {
-      await userEvent.type(screen.getByLabelText('New password'), 'admin');
-      await userEvent.type(screen.getByLabelText('Confirm new password'), 'a');
-      expect(screen.getByText('Passwords must match!')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('New password'), 'admin');
+    await userEvent.type(screen.getByLabelText('Confirm new password'), 'a');
+    await waitFor(() => expect(screen.getByText('Passwords must match!')).toBeInTheDocument());
 
-      await userEvent.type(screen.getByLabelText('Confirm new password'), 'dmin');
-      expect(screen.queryByText('Passwords must match!')).not.toBeInTheDocument();
-    });
+    await userEvent.type(screen.getByLabelText('Confirm new password'), 'dmin');
+    await waitFor(() => expect(screen.queryByText('Passwords must match!')).not.toBeInTheDocument());
   });
   it('should navigate to default url if change password is successful', async () => {
     Object.defineProperty(window, 'location', {

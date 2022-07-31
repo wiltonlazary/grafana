@@ -2,63 +2,65 @@ package cloudmonitoring
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
+	"time"
 
-	"github.com/grafana/grafana/pkg/plugins"
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/grafana-plugin-sdk-go/data"
 )
 
-//nolint: staticcheck // plugins.DataPlugin deprecated
-func (e *Executor) executeAnnotationQuery(ctx context.Context, tsdbQuery plugins.DataQuery) (
-	plugins.DataResponse, error) {
-	result := plugins.DataResponse{
-		Results: make(map[string]plugins.DataQueryResult),
-	}
-
-	firstQuery := tsdbQuery.Queries[0]
-
-	queries, err := e.buildQueryExecutors(tsdbQuery)
-	if err != nil {
-		return plugins.DataResponse{}, err
-	}
-
-	queryRes, resp, _, err := queries[0].run(ctx, tsdbQuery, e)
-	if err != nil {
-		return plugins.DataResponse{}, err
-	}
-
-	metricQuery := firstQuery.Model.Get("metricQuery")
-	title := metricQuery.Get("title").MustString()
-	text := metricQuery.Get("text").MustString()
-	tags := metricQuery.Get("tags").MustString()
-
-	err = queries[0].parseToAnnotations(&queryRes, resp, title, text, tags)
-	result.Results[firstQuery.RefID] = queryRes
-
-	return result, err
+type annotationEvent struct {
+	Title string
+	Time  time.Time
+	Tags  string
+	Text  string
 }
 
-//nolint: staticcheck // plugins.DataPlugin deprecated
-func transformAnnotationToTable(data []map[string]string, result *plugins.DataQueryResult) {
-	table := plugins.DataTable{
-		Columns: make([]plugins.DataTableColumn, 4),
-		Rows:    make([]plugins.DataRowValues, 0),
-	}
-	table.Columns[0].Text = "time"
-	table.Columns[1].Text = "title"
-	table.Columns[2].Text = "tags"
-	table.Columns[3].Text = "text"
+func (s *Service) executeAnnotationQuery(ctx context.Context, req *backend.QueryDataRequest, dsInfo datasourceInfo) (
+	*backend.QueryDataResponse, error) {
+	resp := backend.NewQueryDataResponse()
 
-	for _, r := range data {
-		values := make([]interface{}, 4)
-		values[0] = r["time"]
-		values[1] = r["title"]
-		values[2] = r["tags"]
-		values[3] = r["text"]
-		table.Rows = append(table.Rows, values)
+	queries, err := s.buildQueryExecutors(req)
+	if err != nil {
+		return resp, err
 	}
-	result.Tables = append(result.Tables, table)
-	result.Meta.Set("rowCount", len(data))
-	slog.Info("anno", "len", len(data))
+
+	queryRes, dr, _, err := queries[0].run(ctx, req, s, dsInfo, s.tracer)
+	if err != nil {
+		return resp, err
+	}
+
+	mq := struct {
+		MetricQuery struct {
+			Title string `json:"title"`
+			Text  string `json:"text"`
+		} `json:"metricQuery"`
+	}{}
+
+	firstQuery := req.Queries[0]
+	err = json.Unmarshal(firstQuery.JSON, &mq)
+	if err != nil {
+		return resp, nil
+	}
+	err = queries[0].parseToAnnotations(queryRes, dr, mq.MetricQuery.Title, mq.MetricQuery.Text)
+	resp.Responses[firstQuery.RefID] = *queryRes
+
+	return resp, err
+}
+
+func (timeSeriesQuery cloudMonitoringTimeSeriesQuery) transformAnnotationToFrame(annotations []*annotationEvent, result *backend.DataResponse) {
+	frame := data.NewFrame(timeSeriesQuery.RefID,
+		data.NewField("time", nil, []time.Time{}),
+		data.NewField("title", nil, []string{}),
+		data.NewField("tags", nil, []string{}),
+		data.NewField("text", nil, []string{}),
+	)
+	for _, a := range annotations {
+		frame.AppendRow(a.Time, a.Title, a.Tags, a.Text)
+	}
+	result.Frames = append(result.Frames, frame)
+	slog.Info("anno", "len", len(annotations))
 }
 
 func formatAnnotationText(annotationText string, pointValue string, metricType string, metricLabels map[string]string, resourceLabels map[string]string) string {

@@ -1,4 +1,5 @@
 import { css } from '@emotion/react';
+
 import { GrafanaTheme2 } from '@grafana/data';
 
 export function getPageStyles(theme: GrafanaTheme2) {
@@ -18,14 +19,11 @@ export function getPageStyles(theme: GrafanaTheme2) {
 
     .main-view {
       position: relative;
+      display: flex;
+      flex-direction: column;
       flex-grow: 1;
-    }
-
-    .page-scrollbar-wrapper {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      width: 100%;
+      height: 100%;
+      flex: 1 1 0;
     }
 
     .page-scrollbar-content {

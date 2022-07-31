@@ -1,13 +1,13 @@
 ---
+aliases:
+  - /docs/grafana/latest/shared/getting-started/first-step/
 title: First step of Getting started with...
 ---
 
-## Step 1. Install Grafana and build your first dashboard
+#### Install Grafana and add your first dashboard
 
-Use the instructions in [Getting started with Grafana]({{< relref "../../getting-started/getting-started.md" >}}) to:
+Use the instructions in [Build your first dashboard]({{< relref "../build-first-dashboard/" >}}) to:
 
 - Install Grafana.
-- Log in to Grafana.
-- Create your first dashboard.
-
-You can also configure a [Grafana Cloud](https://grafana.com/docs/grafana-cloud/) instance to display system metrics without having to host Grafana yourself.
+- Sign in to Grafana.
+- Build your first dashboard.

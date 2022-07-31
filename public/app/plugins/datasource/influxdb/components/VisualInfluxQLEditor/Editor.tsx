@@ -1,12 +1,11 @@
+import { css } from '@emotion/css';
 import React, { useMemo } from 'react';
-import { InfluxQuery, InfluxQueryTag } from '../../types';
+
+import { GrafanaTheme2 } from '@grafana/data';
 import { getTemplateSrv } from '@grafana/runtime';
+import { InlineLabel, SegmentSection, useStyles2 } from '@grafana/ui';
+
 import InfluxDatasource from '../../datasource';
-import { FromSection } from './FromSection';
-import { TagsSection } from './TagsSection';
-import { PartListSection } from './PartListSection';
-import { OrderByTimeSection } from './OrderByTimeSection';
-import { InputSection } from './InputSection';
 import {
   getAllMeasurementsForTags,
   getAllPolicies,
@@ -23,12 +22,17 @@ import {
   changeSelectPart,
   changeGroupByPart,
 } from '../../queryUtils';
-import { FormatAsSection } from './FormatAsSection';
+import { InfluxQuery, InfluxQueryTag } from '../../types';
 import { DEFAULT_RESULT_FORMAT } from '../constants';
+import { useUniqueId } from '../useUniqueId';
+
+import { FormatAsSection } from './FormatAsSection';
+import { FromSection } from './FromSection';
+import { InputSection } from './InputSection';
+import { OrderByTimeSection } from './OrderByTimeSection';
+import { PartListSection } from './PartListSection';
+import { TagsSection } from './TagsSection';
 import { getNewSelectPartOptions, getNewGroupByPartOptions, makePartList } from './partListUtils';
-import { InlineLabel, SegmentSection, useStyles2 } from '@grafana/ui';
-import { GrafanaTheme2 } from '@grafana/data';
-import { css } from '@emotion/css';
 
 type Props = {
   query: InfluxQuery;
@@ -52,11 +56,27 @@ function withTemplateVariableOptions(optionsPromise: Promise<string[]>): Promise
   return optionsPromise.then((options) => [...getTemplateVariableOptions(), ...options]);
 }
 
+// it is possible to add fields into the `InfluxQueryTag` structures, and they do work,
+// but in some cases, when we do metadata queries, we have to remove them from the queries.
+function filterTags(parts: InfluxQueryTag[], allTagKeys: Set<string>): InfluxQueryTag[] {
+  return parts.filter((t) => allTagKeys.has(t.key));
+}
+
 export const Editor = (props: Props): JSX.Element => {
+  const uniqueId = useUniqueId();
+  const formatAsId = `influxdb-qe-format-as-${uniqueId}`;
+  const orderByTimeId = `influxdb-qe-order-by${uniqueId}`;
+
   const styles = useStyles2(getStyles);
   const query = normalizeQuery(props.query);
   const { datasource } = props;
   const { measurement, policy } = query;
+
+  const allTagKeys = useMemo(() => {
+    return getTagKeysForMeasurementAndTags(measurement, policy, [], datasource).then((tags) => {
+      return new Set(tags);
+    });
+  }, [measurement, policy, datasource]);
 
   const selectLists = useMemo(() => {
     const dynamicSelectPartOptions = new Map([
@@ -75,8 +95,11 @@ export const Editor = (props: Props): JSX.Element => {
   // the following function is not complicated enough to memoize, but it's result
   // is used in both memoized and un-memoized parts, so we have no choice
   const getTagKeys = useMemo(() => {
-    return () => getTagKeysForMeasurementAndTags(measurement, policy, query.tags ?? [], datasource);
-  }, [measurement, policy, query.tags, datasource]);
+    return () =>
+      allTagKeys.then((keys) =>
+        getTagKeysForMeasurementAndTags(measurement, policy, filterTags(query.tags ?? [], keys), datasource)
+      );
+  }, [measurement, policy, query.tags, datasource, allTagKeys]);
 
   const groupByList = useMemo(() => {
     const dynamicGroupByPartOptions = new Map([['tag_0', getTagKeys]]);
@@ -113,7 +136,13 @@ export const Editor = (props: Props): JSX.Element => {
           getPolicyOptions={() => getAllPolicies(datasource)}
           getMeasurementOptions={(filter) =>
             withTemplateVariableOptions(
-              getAllMeasurementsForTags(filter === '' ? undefined : filter, query.tags ?? [], datasource)
+              allTagKeys.then((keys) =>
+                getAllMeasurementsForTags(
+                  filter === '' ? undefined : filter,
+                  filterTags(query.tags ?? [], keys),
+                  datasource
+                )
+              )
             )
           }
           onChange={handleFromSectionChange}
@@ -126,7 +155,11 @@ export const Editor = (props: Props): JSX.Element => {
           onChange={handleTagsSectionChange}
           getTagKeyOptions={getTagKeys}
           getTagValueOptions={(key: string) =>
-            withTemplateVariableOptions(getTagValues(key, measurement, policy, query.tags ?? [], datasource))
+            withTemplateVariableOptions(
+              allTagKeys.then((keys) =>
+                getTagValues(key, measurement, policy, filterTags(query.tags ?? [], keys), datasource)
+              )
+            )
           }
         />
       </SegmentSection>
@@ -172,10 +205,11 @@ export const Editor = (props: Props): JSX.Element => {
             onAppliedChange({ ...query, tz });
           }}
         />
-        <InlineLabel width="auto" className={styles.inlineLabel}>
+        <InlineLabel htmlFor={orderByTimeId} width="auto" className={styles.inlineLabel}>
           ORDER BY TIME
         </InlineLabel>
         <OrderByTimeSection
+          inputId={orderByTimeId}
           value={query.orderByTime === 'DESC' ? 'DESC' : 'ASC' /* FIXME: make this shared with influx_query_model */}
           onChange={(v) => {
             onAppliedChange({ ...query, orderByTime: v });
@@ -206,8 +240,9 @@ export const Editor = (props: Props): JSX.Element => {
           }}
         />
       </SegmentSection>
-      <SegmentSection label="FORMAT AS" fill={true}>
+      <SegmentSection htmlFor={formatAsId} label="FORMAT AS" fill={true}>
         <FormatAsSection
+          inputId={formatAsId}
           format={query.resultFormat ?? DEFAULT_RESULT_FORMAT}
           onChange={(format) => {
             onAppliedChange({ ...query, resultFormat: format });

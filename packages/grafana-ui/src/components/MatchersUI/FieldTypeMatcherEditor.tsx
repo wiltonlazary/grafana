@@ -1,10 +1,13 @@
 import React, { memo, useMemo, useCallback } from 'react';
-import { MatcherUIProps, FieldMatcherUIRegistryItem } from './types';
+
 import { FieldMatcherID, fieldMatchers, SelectableValue, FieldType, DataFrame } from '@grafana/data';
+
 import { Select } from '../Select/Select';
 
+import { MatcherUIProps, FieldMatcherUIRegistryItem } from './types';
+
 export const FieldTypeMatcherEditor = memo<MatcherUIProps<string>>((props) => {
-  const { data, options, onChange: onChangeFromProps } = props;
+  const { data, options, onChange: onChangeFromProps, id } = props;
   const counts = useFieldCounts(data);
   const selectOptions = useSelectOptions(counts, options);
 
@@ -16,7 +19,7 @@ export const FieldTypeMatcherEditor = memo<MatcherUIProps<string>>((props) => {
   );
 
   const selectedOption = selectOptions.find((v) => v.value === options);
-  return <Select menuShouldPortal value={selectedOption} options={selectOptions} onChange={onChange} />;
+  return <Select inputId={id} value={selectedOption} options={selectOptions} onChange={onChange} />;
 });
 FieldTypeMatcherEditor.displayName = 'FieldTypeMatcherEditor';
 

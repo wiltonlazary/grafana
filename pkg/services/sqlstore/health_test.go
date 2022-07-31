@@ -1,19 +1,20 @@
-//go:build integration
-// +build integration
-
 package sqlstore
 
 import (
+	"context"
 	"testing"
 
 	"github.com/grafana/grafana/pkg/models"
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetDBHealthQuery(t *testing.T) {
-	InitTestDB(t)
+func TestIntegrationGetDBHealthQuery(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	store := InitTestDB(t)
 
 	query := models.GetDBHealthQuery{}
-	err := GetDBHealthQuery(&query)
+	err := store.GetDBHealthQuery(context.Background(), &query)
 	require.NoError(t, err)
 }

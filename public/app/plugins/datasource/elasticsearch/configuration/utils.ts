@@ -1,7 +1,10 @@
-import { DataSourceSettings } from '@grafana/data';
 import { valid } from 'semver';
+
+import { DataSourceSettings } from '@grafana/data';
+
 import { ElasticsearchOptions } from '../types';
 import { coerceESVersion } from '../utils';
+
 import { defaultMaxConcurrentShardRequests } from './ElasticDetails';
 
 export const coerceOptions = (
@@ -37,3 +40,7 @@ export const isValidOptions = (options: DataSourceSettings<ElasticsearchOptions,
     options.jsonData.logLevelField !== undefined
   );
 };
+
+type Truthy<T> = T extends false | '' | 0 | null | undefined ? never : T;
+
+export const isTruthy = <T>(value: T): value is Truthy<T> => Boolean(value);

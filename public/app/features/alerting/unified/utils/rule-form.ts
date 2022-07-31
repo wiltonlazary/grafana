@@ -1,37 +1,43 @@
 import {
   DataQuery,
+  DataSourceRef,
+  getDefaultRelativeTimeRange,
+  IntervalValues,
   rangeUtil,
   RelativeTimeRange,
   ScopedVars,
-  getDefaultRelativeTimeRange,
   TimeRange,
-  IntervalValues,
 } from '@grafana/data';
 import { getDataSourceSrv } from '@grafana/runtime';
-import { contextSrv } from 'app/core/services/context_srv';
+import { ExpressionDatasourceRef } from '@grafana/runtime/src/utils/DataSourceWithBackend';
 import { getNextRefIdChar } from 'app/core/utils/query';
 import { DashboardModel, PanelModel } from 'app/features/dashboard/state';
-import { ExpressionDatasourceID, ExpressionDatasourceUID } from 'app/features/expressions/ExpressionDatasource';
+import { ExpressionDatasourceUID } from 'app/features/expressions/ExpressionDatasource';
 import { ExpressionQuery, ExpressionQueryType } from 'app/features/expressions/types';
 import { RuleWithLocation } from 'app/types/unified-alerting';
 import {
+  AlertQuery,
   Annotations,
   GrafanaAlertStateDecision,
-  AlertQuery,
   Labels,
   PostableRuleGrafanaRuleDTO,
   RulerRuleDTO,
 } from 'app/types/unified-alerting-dto';
+
 import { EvalFunction } from '../../state/alertDef';
 import { RuleFormType, RuleFormValues } from '../types/rule-form';
+
+import { getRulesAccess } from './access-control';
 import { Annotation } from './constants';
-import { isGrafanaRulesSource } from './datasource';
+import { getDefaultOrFirstCompatibleDataSource, isGrafanaRulesSource } from './datasource';
 import { arrayToRecord, recordToArray } from './misc';
 import { isAlertingRulerRule, isGrafanaRulerRule, isRecordingRulerRule } from './rules';
 import { parseInterval } from './time';
 
-export const getDefaultFormValues = (): RuleFormValues =>
-  Object.freeze({
+export const getDefaultFormValues = (): RuleFormValues => {
+  const { canCreateGrafanaRules, canCreateCloudRules } = getRulesAccess();
+
+  return Object.freeze({
     name: '',
     labels: [{ key: '', value: '' }],
     annotations: [
@@ -40,7 +46,8 @@ export const getDefaultFormValues = (): RuleFormValues =>
       { key: Annotation.runbookURL, value: '' },
     ],
     dataSourceName: null,
-    type: !contextSrv.isEditor ? RuleFormType.grafana : undefined, // viewers can't create prom alerts
+    type: canCreateGrafanaRules ? RuleFormType.grafana : canCreateCloudRules ? RuleFormType.cloudAlerting : undefined, // viewers can't create prom alerts
+    group: '',
 
     // grafana
     folder: null,
@@ -52,12 +59,12 @@ export const getDefaultFormValues = (): RuleFormValues =>
     evaluateFor: '5m',
 
     // cortex / loki
-    group: '',
     namespace: '',
     expression: '',
     forTime: 1,
     forTimeUnit: 'm',
   });
+};
 
 export function formValuesToRulerRuleDTO(values: RuleFormValues): RulerRuleDTO {
   const { name, expression, forTime, forTimeUnit, type } = values;
@@ -113,6 +120,7 @@ export function rulerRuleToFormValues(ruleWithLocation: RuleWithLocation): RuleF
         ...defaultFormValues,
         name: ga.title,
         type: RuleFormType.grafana,
+        group: group.name,
         evaluateFor: rule.for || '0',
         evaluateEvery: group.interval || defaultFormValues.evaluateEvery,
         noDataState: ga.no_data_state,
@@ -162,7 +170,7 @@ export function rulerRuleToFormValues(ruleWithLocation: RuleWithLocation): RuleF
 }
 
 export const getDefaultQueries = (): AlertQuery[] => {
-  const dataSource = getDataSourceSrv().getInstanceSettings('default');
+  const dataSource = getDefaultOrFirstCompatibleDataSource();
 
   if (!dataSource) {
     return [getDefaultExpression('A')];
@@ -189,7 +197,10 @@ const getDefaultExpression = (refId: string): AlertQuery => {
     refId,
     hide: false,
     type: ExpressionQueryType.classic,
-    datasource: ExpressionDatasourceID,
+    datasource: {
+      uid: ExpressionDatasourceUID,
+      type: ExpressionDatasourceRef.type,
+    },
     conditions: [
       {
         type: 'query',
@@ -209,6 +220,7 @@ const getDefaultExpression = (refId: string): AlertQuery => {
         },
       },
     ],
+    expression: 'A',
   };
 
   return {
@@ -223,14 +235,15 @@ const dataQueriesToGrafanaQueries = async (
   queries: DataQuery[],
   relativeTimeRange: RelativeTimeRange,
   scopedVars: ScopedVars | {},
-  datasourceName?: string,
+  panelDataSourceRef?: DataSourceRef,
   maxDataPoints?: number,
   minInterval?: string
 ): Promise<AlertQuery[]> => {
   const result: AlertQuery[] = [];
+
   for (const target of queries) {
-    const dsName = target.datasource || datasourceName;
-    const datasource = await getDataSourceSrv().get(dsName);
+    const datasource = await getDataSourceSrv().get(target.datasource?.uid ? target.datasource : panelDataSourceRef);
+    const dsRef = { uid: datasource.uid, type: datasource.type };
 
     const range = rangeUtil.relativeToTimeRange(relativeTimeRange);
     const { interval, intervalMs } = getIntervals(range, minInterval ?? datasource.interval, maxDataPoints);
@@ -239,37 +252,37 @@ const dataQueriesToGrafanaQueries = async (
       __interval_ms: { text: intervalMs, value: intervalMs },
       ...scopedVars,
     };
+
     const interpolatedTarget = datasource.interpolateVariablesInQueries
       ? await datasource.interpolateVariablesInQueries([target], queryVariables)[0]
       : target;
-    if (dsName) {
-      // expressions
-      if (dsName === ExpressionDatasourceID) {
+
+    // expressions
+    if (dsRef.uid === ExpressionDatasourceUID) {
+      const newQuery: AlertQuery = {
+        refId: interpolatedTarget.refId,
+        queryType: '',
+        relativeTimeRange,
+        datasourceUid: ExpressionDatasourceUID,
+        model: interpolatedTarget,
+      };
+      result.push(newQuery);
+      // queries
+    } else {
+      const datasourceSettings = getDataSourceSrv().getInstanceSettings(dsRef);
+      if (datasourceSettings && datasourceSettings.meta.alerting) {
         const newQuery: AlertQuery = {
           refId: interpolatedTarget.refId,
-          queryType: '',
+          queryType: interpolatedTarget.queryType ?? '',
           relativeTimeRange,
-          datasourceUid: ExpressionDatasourceUID,
-          model: interpolatedTarget,
+          datasourceUid: datasourceSettings.uid,
+          model: {
+            ...interpolatedTarget,
+            maxDataPoints,
+            intervalMs,
+          },
         };
         result.push(newQuery);
-        // queries
-      } else {
-        const datasourceSettings = getDataSourceSrv().getInstanceSettings(dsName);
-        if (datasourceSettings && datasourceSettings.meta.alerting) {
-          const newQuery: AlertQuery = {
-            refId: interpolatedTarget.refId,
-            queryType: interpolatedTarget.queryType ?? '',
-            relativeTimeRange,
-            datasourceUid: datasourceSettings.uid,
-            model: {
-              ...interpolatedTarget,
-              maxDataPoints,
-              intervalMs,
-            },
-          };
-          result.push(newQuery);
-        }
       }
     }
   }
@@ -281,7 +294,7 @@ export const panelToRuleFormValues = async (
   dashboard: DashboardModel
 ): Promise<Partial<RuleFormValues> | undefined> => {
   const { targets } = panel;
-  if (!panel.editSourceId || !dashboard.uid) {
+  if (!panel.id || !dashboard.uid) {
     return undefined;
   }
 
@@ -324,7 +337,7 @@ export const panelToRuleFormValues = async (
       },
       {
         key: Annotation.panelID,
-        value: String(panel.editSourceId),
+        value: String(panel.id),
       },
     ],
   };

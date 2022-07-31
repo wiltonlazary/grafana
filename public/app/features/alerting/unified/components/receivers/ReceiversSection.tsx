@@ -1,8 +1,9 @@
 import { css, cx } from '@emotion/css';
-import { GrafanaTheme2 } from '@grafana/data';
-import { Button, useStyles2 } from '@grafana/ui';
 import React, { FC } from 'react';
 import { Link } from 'react-router-dom';
+
+import { GrafanaTheme2 } from '@grafana/data';
+import { Button, useStyles2 } from '@grafana/ui';
 
 interface Props {
   title: string;
@@ -10,6 +11,7 @@ interface Props {
   addButtonLabel: string;
   addButtonTo: string;
   className?: string;
+  showButton?: boolean;
 }
 
 export const ReceiversSection: FC<Props> = ({
@@ -19,6 +21,7 @@ export const ReceiversSection: FC<Props> = ({
   addButtonLabel,
   addButtonTo,
   children,
+  showButton = true,
 }) => {
   const styles = useStyles2(getStyles);
   return (
@@ -28,9 +31,13 @@ export const ReceiversSection: FC<Props> = ({
           <h4>{title}</h4>
           <p className={styles.description}>{description}</p>
         </div>
-        <Link to={addButtonTo}>
-          <Button icon="plus">{addButtonLabel}</Button>
-        </Link>
+        {showButton && (
+          <Link to={addButtonTo}>
+            <Button type="button" icon="plus">
+              {addButtonLabel}
+            </Button>
+          </Link>
+        )}
       </div>
       {children}
     </>

@@ -1,9 +1,12 @@
 import React, { FC, useState } from 'react';
-import { NotificationChannelOption } from 'app/types';
 import { FieldError, DeepMap, useFormContext } from 'react-hook-form';
-import { OptionField } from './OptionField';
+
 import { Button, useStyles2 } from '@grafana/ui';
+import { NotificationChannelOption } from 'app/types';
+
 import { ActionIcon } from '../../../rules/ActionIcon';
+
+import { OptionField } from './OptionField';
 import { getReceiverFormFieldStyles } from './styles';
 
 interface Props {
@@ -11,9 +14,10 @@ interface Props {
   option: NotificationChannelOption;
   pathPrefix: string;
   errors?: DeepMap<any, FieldError>;
+  readOnly?: boolean;
 }
 
-export const SubformField: FC<Props> = ({ option, pathPrefix, errors, defaultValue }) => {
+export const SubformField: FC<Props> = ({ option, pathPrefix, errors, defaultValue, readOnly = false }) => {
   const styles = useStyles2(getReceiverFormFieldStyles);
   const name = `${pathPrefix}${option.propertyName}`;
   const { watch } = useFormContext();
@@ -28,16 +32,19 @@ export const SubformField: FC<Props> = ({ option, pathPrefix, errors, defaultVal
       {option.description && <p className={styles.description}>{option.description}</p>}
       {show && (
         <>
-          <ActionIcon
-            data-testid={`${name}.delete-button`}
-            icon="trash-alt"
-            tooltip="delete"
-            onClick={() => setShow(false)}
-            className={styles.deleteIcon}
-          />
+          {!readOnly && (
+            <ActionIcon
+              data-testid={`${name}.delete-button`}
+              icon="trash-alt"
+              tooltip="delete"
+              onClick={() => setShow(false)}
+              className={styles.deleteIcon}
+            />
+          )}
           {(option.subformOptions ?? []).map((subOption) => {
             return (
               <OptionField
+                readOnly={readOnly}
                 defaultValue={defaultValue?.[subOption.propertyName]}
                 key={subOption.propertyName}
                 option={subOption}
@@ -48,7 +55,7 @@ export const SubformField: FC<Props> = ({ option, pathPrefix, errors, defaultVal
           })}
         </>
       )}
-      {!show && (
+      {!show && !readOnly && (
         <Button
           className={styles.addButton}
           type="button"

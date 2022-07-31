@@ -1,19 +1,22 @@
+import { Observable, of, throwError } from 'rxjs';
+import { delay, take } from 'rxjs/operators';
+import { createFetchResponse } from 'test/helpers/createFetchResponse';
+
 import {
   ArrayVector,
   DataFrame,
   DataFrameJSON,
+  DataSourceApi,
   Field,
   FieldType,
   getDefaultRelativeTimeRange,
   LoadingState,
   rangeUtil,
 } from '@grafana/data';
-import { FetchResponse } from '@grafana/runtime';
+import { DataSourceSrv, FetchResponse } from '@grafana/runtime';
 import { BackendSrv } from 'app/core/services/backend_srv';
 import { AlertQuery } from 'app/types/unified-alerting-dto';
-import { Observable, of, throwError } from 'rxjs';
-import { delay, take } from 'rxjs/operators';
-import { createFetchResponse } from 'test/helpers/createFetchResponse';
+
 import { AlertingQueryResponse, AlertingQueryRunner } from './AlertingQueryRunner';
 
 describe('AlertingQueryRunner', () => {
@@ -28,7 +31,8 @@ describe('AlertingQueryRunner', () => {
     const runner = new AlertingQueryRunner(
       mockBackendSrv({
         fetch: () => of(response),
-      })
+      }),
+      mockDataSourceSrv()
     );
 
     const data = runner.get();
@@ -82,7 +86,8 @@ describe('AlertingQueryRunner', () => {
     const runner = new AlertingQueryRunner(
       mockBackendSrv({
         fetch: () => of(response),
-      })
+      }),
+      mockDataSourceSrv()
     );
 
     const data = runner.get();
@@ -90,12 +95,15 @@ describe('AlertingQueryRunner', () => {
 
     await expect(data.pipe(take(1))).toEmitValuesWith((values) => {
       const [data] = values;
+
+      // these test are flakey since the absolute computed "timeRange" can differ from the relative "defaultRelativeTimeRange"
+      // so instead we will check if the size of the timeranges match
       const relativeA = rangeUtil.timeRangeToRelative(data.A.timeRange);
       const relativeB = rangeUtil.timeRangeToRelative(data.B.timeRange);
-      const expected = getDefaultRelativeTimeRange();
+      const defaultRange = getDefaultRelativeTimeRange();
 
-      expect(relativeA).toEqual(expected);
-      expect(relativeB).toEqual(expected);
+      expect(relativeA.from - defaultRange.from).toEqual(relativeA.to - defaultRange.to);
+      expect(relativeB.from - defaultRange.from).toEqual(relativeB.to - defaultRange.to);
     });
   });
 
@@ -110,7 +118,8 @@ describe('AlertingQueryRunner', () => {
     const runner = new AlertingQueryRunner(
       mockBackendSrv({
         fetch: () => of(response).pipe(delay(210)),
-      })
+      }),
+      mockDataSourceSrv()
     );
 
     const data = runner.get();
@@ -162,7 +171,8 @@ describe('AlertingQueryRunner', () => {
     const runner = new AlertingQueryRunner(
       mockBackendSrv({
         fetch: () => throwError(error),
-      })
+      }),
+      mockDataSourceSrv()
     );
 
     const data = runner.get();
@@ -178,6 +188,28 @@ describe('AlertingQueryRunner', () => {
       expect(data.B.error).toEqual(error);
     });
   });
+
+  it('should not execute if a query fails filterQuery check', async () => {
+    const runner = new AlertingQueryRunner(
+      mockBackendSrv({
+        fetch: () => throwError(new Error("shouldn't happen")),
+      }),
+      mockDataSourceSrv({ filterQuery: () => false })
+    );
+
+    const data = runner.get();
+    runner.run([createQuery('A'), createQuery('B')]);
+
+    await expect(data.pipe(take(1))).toEmitValuesWith((values) => {
+      const [data] = values;
+
+      expect(data.A.state).toEqual(LoadingState.Done);
+      expect(data.A.series).toHaveLength(0);
+
+      expect(data.B.state).toEqual(LoadingState.Done);
+      expect(data.B.series).toHaveLength(0);
+    });
+  });
 });
 
 type MockBackendSrvConfig = {
@@ -185,10 +217,16 @@ type MockBackendSrvConfig = {
 };
 
 const mockBackendSrv = ({ fetch }: MockBackendSrvConfig): BackendSrv => {
-  return ({
+  return {
     fetch,
     resolveCancelerIfExists: jest.fn(),
-  } as unknown) as BackendSrv;
+  } as unknown as BackendSrv;
+};
+
+const mockDataSourceSrv = (dsApi?: Partial<DataSourceApi>) => {
+  return {
+    get: () => Promise.resolve(dsApi ?? {}),
+  } as unknown as DataSourceSrv;
 };
 
 const expectDataFrameWithValues = ({ time, values }: { time: number[]; values: number[] }): DataFrame => {

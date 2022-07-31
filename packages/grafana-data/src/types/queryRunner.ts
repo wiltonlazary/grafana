@@ -1,8 +1,9 @@
 import { Observable } from 'rxjs';
-import { DataQuery, DatasourceRef } from './query';
+
+import { ScopedVars } from './ScopedVars';
 import { DataSourceApi } from './datasource';
 import { PanelData } from './panel';
-import { ScopedVars } from './ScopedVars';
+import { DataQuery, DataSourceRef } from './query';
 import { TimeRange, TimeZone } from './time';
 
 /**
@@ -11,7 +12,7 @@ import { TimeRange, TimeZone } from './time';
  * @internal
  */
 export interface QueryRunnerOptions {
-  datasource: DatasourceRef | DataSourceApi | null;
+  datasource: DataSourceRef | DataSourceApi | null;
   queries: DataQuery[];
   panelId?: number;
   dashboardId?: number;

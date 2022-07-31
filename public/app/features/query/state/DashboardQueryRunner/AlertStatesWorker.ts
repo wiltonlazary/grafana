@@ -1,7 +1,9 @@
-import { DashboardQueryRunnerOptions, DashboardQueryRunnerWorker, DashboardQueryRunnerWorkerResult } from './types';
 import { from, Observable } from 'rxjs';
-import { getBackendSrv } from '@grafana/runtime';
 import { catchError, map } from 'rxjs/operators';
+
+import { getBackendSrv } from '@grafana/runtime';
+
+import { DashboardQueryRunnerOptions, DashboardQueryRunnerWorker, DashboardQueryRunnerWorkerResult } from './types';
 import { emptyResult, handleDashboardQueryRunnerWorkerError } from './utils';
 
 export class AlertStatesWorker implements DashboardQueryRunnerWorker {
@@ -11,6 +13,11 @@ export class AlertStatesWorker implements DashboardQueryRunnerWorker {
     }
 
     if (range.raw.to !== 'now') {
+      return false;
+    }
+
+    // if dashboard has no alerts, no point to query alert states
+    if (!dashboard.panels.find((panel) => !!panel.alert)) {
       return false;
     }
 

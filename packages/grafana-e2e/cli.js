@@ -1,7 +1,7 @@
+const { program } = require('commander');
 const execa = require('execa');
-const program = require('commander');
-const resolveBin = require('resolve-as-bin');
 const { resolve, sep } = require('path');
+const resolveBin = require('resolve-as-bin');
 
 const cypress = (commandName, { updateScreenshots }) => {
   // Support running an unpublished dev build

@@ -1,99 +1,35 @@
 import { renderHook } from '@testing-library/react-hooks';
 
-import {
-  DataHook,
-  useAsyncState,
-  useMetricNames,
-  useResourceGroups,
-  useResourceNames,
-  useResourceTypes,
-} from './dataHooks';
-import { AzureMetricQuery, AzureMonitorOption, AzureQueryType } from '../../types';
 import createMockDatasource from '../../__mocks__/datasource';
-import { MockedObjectDeep } from 'ts-jest/dist/utils/testing';
 import Datasource from '../../datasource';
+import { AzureMetricQuery, AzureMonitorOption, AzureMonitorQuery, AzureQueryType } from '../../types';
 
-interface WaitableMock extends jest.Mock<any, any> {
-  waitToBeCalled(): Promise<unknown>;
-}
+import {
+  useMetricNames,
+  useMetricNamespaces,
+  useMetricMetadata,
+  DataHook,
+  MetricMetadata,
+  MetricsMetadataHook,
+} from './dataHooks';
 
 const WAIT_OPTIONS = {
   timeout: 1000,
 };
 
-function createWaitableMock() {
-  let resolve: Function;
-
-  const mock = jest.fn() as WaitableMock;
-  mock.mockImplementation(() => {
-    resolve && resolve();
-  });
-
-  mock.waitToBeCalled = () => {
-    return new Promise((_resolve) => (resolve = _resolve));
-  };
-
-  return mock;
-}
-
 const opt = (text: string, value: string) => ({ text, value });
-
-describe('AzureMonitor: useAsyncState', () => {
-  const MOCKED_RANDOM_VALUE = 0.42069;
-
-  beforeEach(() => {
-    jest.spyOn(global.Math, 'random').mockReturnValue(MOCKED_RANDOM_VALUE);
-  });
-
-  afterEach(() => {
-    jest.spyOn(global.Math, 'random').mockRestore();
-  });
-
-  it('should return data from an async function', async () => {
-    const apiCall = () => Promise.resolve(['a', 'b', 'c']);
-    const setError = jest.fn();
-
-    const { result, waitForNextUpdate } = renderHook(() => useAsyncState(apiCall, setError, []));
-    await waitForNextUpdate();
-
-    expect(result.current).toEqual(['a', 'b', 'c']);
-  });
-
-  it('should report errors through setError', async () => {
-    const error = new Error();
-    const apiCall = () => Promise.reject(error);
-    const setError = createWaitableMock();
-
-    const { result, waitForNextUpdate } = renderHook(() => useAsyncState(apiCall, setError, []));
-    await Promise.race([waitForNextUpdate(), setError.waitToBeCalled()]);
-
-    expect(result.current).toEqual([]);
-    expect(setError).toHaveBeenCalledWith(MOCKED_RANDOM_VALUE, error);
-  });
-
-  it('should clear the error once the request is successful', async () => {
-    const apiCall = () => Promise.resolve(['a', 'b', 'c']);
-    const setError = createWaitableMock();
-
-    const { waitForNextUpdate } = renderHook(() => useAsyncState(apiCall, setError, []));
-    await Promise.race([waitForNextUpdate(), setError.waitToBeCalled()]);
-
-    expect(setError).toHaveBeenCalledWith(MOCKED_RANDOM_VALUE, undefined);
-  });
-});
 
 interface TestScenario {
   name: string;
-  hook: DataHook;
+  hook: DataHook | MetricsMetadataHook;
 
-  // For conviencence, only need to define the azureMonitor part of the query
+  // For convenience, only need to define the azureMonitor part of the query for some tests
   emptyQueryPartial: AzureMetricQuery;
-  validQueryPartial: AzureMetricQuery;
-  invalidQueryPartial: AzureMetricQuery;
-  templateVariableQueryPartial: AzureMetricQuery;
+  customProperties: AzureMetricQuery;
+  topLevelCustomProperties?: Partial<AzureMonitorQuery>;
 
-  expectedClearedQueryPartial: AzureMetricQuery;
-  expectedOptions: AzureMonitorOption[];
+  expectedCustomPropertyResults?: Array<AzureMonitorOption<string>>;
+  expectedOptions: AzureMonitorOption[] | MetricMetadata;
 }
 
 describe('AzureMonitor: metrics dataHooks', () => {
@@ -105,134 +41,18 @@ describe('AzureMonitor: metrics dataHooks', () => {
 
   const testTable: TestScenario[] = [
     {
-      name: 'useResourceGroups',
-      hook: useResourceGroups,
-      emptyQueryPartial: {},
-      validQueryPartial: {
-        resourceGroup: 'web-app-development',
-      },
-      invalidQueryPartial: {
-        resourceGroup: 'wrong-resource-group`',
-      },
-      templateVariableQueryPartial: {
-        resourceGroup: '$rg',
-      },
-      expectedOptions: [
-        {
-          label: 'Web App - Production',
-          value: 'web-app-production',
-        },
-        {
-          label: 'Web App - Development',
-          value: 'web-app-development',
-        },
-      ],
-      expectedClearedQueryPartial: {
-        resourceGroup: undefined,
-      },
-    },
-
-    {
-      name: 'useResourceTypes',
-      hook: useResourceTypes,
-      emptyQueryPartial: {
-        resourceGroup: 'web-app-development',
-      },
-      validQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: 'azure/vm',
-      },
-      invalidQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: 'azure/invalid-resource-type',
-      },
-      templateVariableQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: '$rt',
-      },
-      expectedOptions: [
-        {
-          label: 'Virtual Machine',
-          value: 'azure/vm',
-        },
-        {
-          label: 'Database',
-          value: 'azure/db',
-        },
-      ],
-      expectedClearedQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: undefined,
-      },
-    },
-
-    {
-      name: 'useResourceNames',
-      hook: useResourceNames,
-      emptyQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: 'azure/vm',
-      },
-      validQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: 'azure/vm',
-        resourceName: 'web-server',
-      },
-      invalidQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: 'azure/vm',
-        resourceName: 'resource-that-doesnt-exist',
-      },
-      templateVariableQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: 'azure/vm',
-        resourceName: '$variable',
-      },
-      expectedOptions: [
-        {
-          label: 'Web server',
-          value: 'web-server',
-        },
-        {
-          label: 'Job server',
-          value: 'job-server',
-        },
-      ],
-      expectedClearedQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: 'azure/vm',
-        resourceName: undefined,
-      },
-    },
-
-    {
       name: 'useMetricNames',
       hook: useMetricNames,
       emptyQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: 'azure/vm',
-        resourceName: 'web-server',
+        resourceUri:
+          '/subscriptions/99999999-cccc-bbbb-aaaa-9106972f9572/resourceGroups/grafanastaging/providers/Microsoft.Compute/virtualMachines/grafana',
         metricNamespace: 'azure/vm',
       },
-      validQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: 'azure/vm',
-        resourceName: 'web-server',
+      customProperties: {
+        resourceUri:
+          '/subscriptions/99999999-cccc-bbbb-aaaa-9106972f9572/resourceGroups/grafanastaging/providers/Microsoft.Compute/virtualMachines/grafana',
         metricNamespace: 'azure/vm',
-      },
-      invalidQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: 'azure/vm',
-        resourceName: 'web-server',
-        metricNamespace: 'azure/vm',
-        metricName: 'invalid-metric',
-      },
-      templateVariableQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: 'azure/vm',
-        resourceName: 'web-server',
-        metricNamespace: 'azure/vm',
-        metricName: '$variable',
+        metricName: 'metric-$ENVIRONMENT',
       },
       expectedOptions: [
         {
@@ -244,17 +64,49 @@ describe('AzureMonitor: metrics dataHooks', () => {
           value: 'free-memory',
         },
       ],
-      expectedClearedQueryPartial: {
-        resourceGroup: 'web-app-development',
-        metricDefinition: 'azure/vm',
-        resourceName: 'web-server',
+      expectedCustomPropertyResults: [
+        { label: 'Percentage CPU', value: 'percentage-cpu' },
+        { label: 'Free memory', value: 'free-memory' },
+        { label: 'metric-$ENVIRONMENT', value: 'metric-$ENVIRONMENT' },
+      ],
+    },
+    {
+      name: 'useMetricNamespaces',
+      hook: useMetricNamespaces,
+      emptyQueryPartial: {
+        resourceUri:
+          '/subscriptions/99999999-cccc-bbbb-aaaa-9106972f9572/resourceGroups/grafanastaging/providers/Microsoft.Compute/virtualMachines/grafana',
         metricNamespace: 'azure/vm',
-        metricName: undefined,
       },
+      customProperties: {
+        resourceUri:
+          '/subscriptions/99999999-cccc-bbbb-aaaa-9106972f9572/resourceGroups/grafanastaging/providers/Microsoft.Compute/virtualMachines/grafana',
+        metricNamespace: 'azure/vm-$ENVIRONMENT',
+        metricName: 'metric-name',
+      },
+      expectedOptions: [
+        {
+          label: 'Compute Virtual Machine',
+          value: 'azure/vmc',
+        },
+        {
+          label: 'Database NS',
+          value: 'azure/dbns',
+        },
+        {
+          label: 'azure/vm',
+          value: 'azure/vm',
+        },
+      ],
+      expectedCustomPropertyResults: [
+        { label: 'Compute Virtual Machine', value: 'azure/vmc' },
+        { label: 'Database NS', value: 'azure/dbns' },
+        { label: 'azure/vm-$ENVIRONMENT', value: 'azure/vm-$ENVIRONMENT' },
+      ],
     },
   ];
 
-  let datasource: MockedObjectDeep<Datasource>;
+  let datasource: Datasource;
   let onChange: jest.Mock<any, any>;
   let setError: jest.Mock<any, any>;
 
@@ -265,6 +117,10 @@ describe('AzureMonitor: metrics dataHooks', () => {
     datasource = createMockDatasource();
     datasource.getVariables = jest.fn().mockReturnValue(['$sub', '$rg', '$rt', '$variable']);
 
+    datasource.azureMonitorDatasource.getSubscriptions = jest
+      .fn()
+      .mockResolvedValue([opt('sub-abc-123', 'sub-abc-123')]);
+
     datasource.getResourceGroups = jest
       .fn()
       .mockResolvedValue([
@@ -272,17 +128,34 @@ describe('AzureMonitor: metrics dataHooks', () => {
         opt('Web App - Development', 'web-app-development'),
       ]);
 
-    datasource.getMetricDefinitions = jest
-      .fn()
-      .mockResolvedValue([opt('Virtual Machine', 'azure/vm'), opt('Database', 'azure/db')]);
-
     datasource.getResourceNames = jest
       .fn()
       .mockResolvedValue([opt('Web server', 'web-server'), opt('Job server', 'job-server')]);
 
-    datasource.getMetricNames = jest
+    datasource.azureMonitorDatasource.getMetricNames = jest
       .fn()
       .mockResolvedValue([opt('Percentage CPU', 'percentage-cpu'), opt('Free memory', 'free-memory')]);
+
+    datasource.azureMonitorDatasource.getMetricNamespaces = jest
+      .fn()
+      .mockResolvedValue([opt('Compute Virtual Machine', 'azure/vmc'), opt('Database NS', 'azure/dbns')]);
+
+    datasource.azureMonitorDatasource.getMetricMetadata = jest.fn().mockResolvedValue({
+      primaryAggType: 'Average',
+      supportedAggTypes: ['Average'],
+      supportedTimeGrains: [
+        { label: 'Auto', value: 'auto' },
+        { label: '1 minute', value: 'PT1M' },
+        { label: '5 minutes', value: 'PT5M' },
+        { label: '15 minutes', value: 'PT15M' },
+        { label: '30 minutes', value: 'PT30M' },
+        { label: '1 hour', value: 'PT1H' },
+        { label: '6 hours', value: 'PT6H' },
+        { label: '12 hours', value: 'PT12H' },
+        { label: '1 day', value: 'P1D' },
+      ],
+      dimensions: [],
+    });
   });
 
   describe.each(testTable)('scenario %#: $name', (scenario) => {
@@ -297,50 +170,67 @@ describe('AzureMonitor: metrics dataHooks', () => {
       expect(result.current).toEqual(scenario.expectedOptions);
     });
 
-    it('does not call onChange when the property has not been set', async () => {
+    it('adds custom properties as a valid option', async () => {
       const query = {
         ...bareQuery,
-        azureMonitor: scenario.emptyQueryPartial,
+        azureMonitor: scenario.customProperties,
+        ...scenario.topLevelCustomProperties,
       };
-      const { waitForNextUpdate } = renderHook(() => scenario.hook(query, datasource, onChange, setError));
+      const { result, waitForNextUpdate } = renderHook(() => scenario.hook(query, datasource, onChange, setError));
       await waitForNextUpdate(WAIT_OPTIONS);
 
-      expect(onChange).not.toHaveBeenCalled();
+      expect(result.current).toEqual(scenario.expectedCustomPropertyResults);
     });
+  });
 
-    it('does not clear the property when it is a valid option', async () => {
+  describe('useMetricsMetadataHook', () => {
+    const metricsMetadataConfig = {
+      name: 'useMetricMetadata',
+      hook: useMetricMetadata,
+      emptyQueryPartial: {
+        resourceUri:
+          '/subscriptions/99999999-cccc-bbbb-aaaa-9106972f9572/resourceGroups/grafanastaging/providers/Microsoft.Compute/virtualMachines/grafana',
+        metricNamespace: 'azure/vm',
+        metricName: 'Average CPU',
+      },
+      customProperties: {},
+      expectedOptions: {
+        aggOptions: [{ label: 'Average', value: 'Average' }],
+        timeGrains: [
+          { label: 'Auto', value: 'auto' },
+          { label: '1 minute', value: 'PT1M' },
+          { label: '5 minutes', value: 'PT5M' },
+          { label: '15 minutes', value: 'PT15M' },
+          { label: '30 minutes', value: 'PT30M' },
+          { label: '1 hour', value: 'PT1H' },
+          { label: '6 hours', value: 'PT6H' },
+          { label: '12 hours', value: 'PT12H' },
+          { label: '1 day', value: 'P1D' },
+        ],
+        dimensions: [],
+        isLoading: false,
+        supportedAggTypes: ['Average'],
+        primaryAggType: 'Average',
+      },
+    };
+
+    it('returns values', async () => {
       const query = {
         ...bareQuery,
-        azureMonitor: scenario.validQueryPartial,
+        azureMonitor: metricsMetadataConfig.emptyQueryPartial,
       };
-      const { waitForNextUpdate } = renderHook(() => scenario.hook(query, datasource, onChange, setError));
+      const { result, waitForNextUpdate } = renderHook(() => metricsMetadataConfig.hook(query, datasource, onChange));
       await waitForNextUpdate(WAIT_OPTIONS);
 
-      expect(onChange).not.toHaveBeenCalled();
-    });
-
-    it('does not clear the property when it is a template variable', async () => {
-      const query = {
-        ...bareQuery,
-        azureMonitor: scenario.templateVariableQueryPartial,
-      };
-      const { waitForNextUpdate } = renderHook(() => scenario.hook(query, datasource, onChange, setError));
-      await waitForNextUpdate(WAIT_OPTIONS);
-
-      expect(onChange).not.toHaveBeenCalled();
-    });
-
-    it('clears the property when it is not a valid option', async () => {
-      const query = {
-        ...bareQuery,
-        azureMonitor: scenario.invalidQueryPartial,
-      };
-      const { waitForNextUpdate } = renderHook(() => scenario.hook(query, datasource, onChange, setError));
-      await waitForNextUpdate(WAIT_OPTIONS);
-
+      expect(result.current).toEqual(metricsMetadataConfig.expectedOptions);
       expect(onChange).toHaveBeenCalledWith({
         ...query,
-        azureMonitor: scenario.expectedClearedQueryPartial,
+        azureMonitor: {
+          ...query.azureMonitor,
+          aggregation: result.current.primaryAggType,
+          timeGrain: 'auto',
+          allowedTimeGrainsMs: [60_000, 300_000, 900_000, 1_800_000, 3_600_000, 21_600_000, 43_200_000, 86_400_000],
+        },
       });
     });
   });

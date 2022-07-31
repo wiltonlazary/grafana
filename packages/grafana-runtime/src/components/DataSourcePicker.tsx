@@ -2,11 +2,19 @@
 import React, { PureComponent } from 'react';
 
 // Components
-import { HorizontalGroup, PluginSignatureBadge, Select, stylesFactory } from '@grafana/ui';
-import { DataSourceInstanceSettings, isUnsignedPluginSignature, SelectableValue } from '@grafana/data';
+import {
+  DataSourceInstanceSettings,
+  DataSourceRef,
+  getDataSourceUID,
+  isUnsignedPluginSignature,
+  SelectableValue,
+} from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
+import { ActionMeta, HorizontalGroup, PluginSignatureBadge, Select } from '@grafana/ui';
+
 import { getDataSourceSrv } from '../services/dataSourceSrv';
-import { css, cx } from '@emotion/css';
+
+import { ExpressionDatasourceRef } from './../utils/DataSourceWithBackend';
 
 /**
  * Component props description for the {@link DataSourcePicker}
@@ -15,7 +23,7 @@ import { css, cx } from '@emotion/css';
  */
 export interface DataSourcePickerProps {
   onChange: (ds: DataSourceInstanceSettings) => void;
-  current: string | null;
+  current: DataSourceRef | string | null; // uid
   hideTextValue?: boolean;
   onBlur?: () => void;
   autoFocus?: boolean;
@@ -30,10 +38,14 @@ export interface DataSourcePickerProps {
   variables?: boolean;
   alerting?: boolean;
   pluginId?: string;
+  /** If true,we show only DSs with logs; and if true, pluginId shouldnt be passed in */
+  logs?: boolean;
   // If set to true and there is no value select will be empty, otherwise it will preselect default data source
   noDefault?: boolean;
   width?: number;
+  inputId?: string;
   filter?: (dataSource: DataSourceInstanceSettings) => boolean;
+  onClear?: () => void;
 }
 
 /**
@@ -74,7 +86,12 @@ export class DataSourcePicker extends PureComponent<DataSourcePickerProps, DataS
     }
   }
 
-  onChange = (item: SelectableValue<string>) => {
+  onChange = (item: SelectableValue<string>, actionMeta: ActionMeta) => {
+    if (actionMeta.action === 'clear' && this.props.onClear) {
+      this.props.onClear();
+      return;
+    }
+
     const dsSettings = this.dataSourceSrv.getInstanceSettings(item.value);
 
     if (dsSettings) {
@@ -85,7 +102,6 @@ export class DataSourcePicker extends PureComponent<DataSourcePickerProps, DataS
 
   private getCurrentValue(): SelectableValue<string> | undefined {
     const { current, hideTextValue, noDefault } = this.props;
-
     if (!current && noDefault) {
       return;
     }
@@ -94,29 +110,38 @@ export class DataSourcePicker extends PureComponent<DataSourcePickerProps, DataS
 
     if (ds) {
       return {
-        label: ds.name.substr(0, 37),
-        value: ds.name,
+        label: ds.name.slice(0, 37),
+        value: ds.uid,
         imgUrl: ds.meta.info.logos.small,
         hideText: hideTextValue,
         meta: ds.meta,
       };
     }
 
+    const uid = getDataSourceUID(current);
+
+    if (uid === ExpressionDatasourceRef.uid || uid === ExpressionDatasourceRef.name) {
+      return { label: uid, value: uid, hideText: hideTextValue };
+    }
+
     return {
-      label: (current ?? 'no name') + ' - not found',
-      value: current === null ? undefined : current,
+      label: (uid ?? 'no name') + ' - not found',
+      value: uid ?? undefined,
       imgUrl: '',
       hideText: hideTextValue,
     };
   }
 
   getDataSourceOptions() {
-    const { alerting, tracing, metrics, mixed, dashboard, variables, annotations, pluginId, type, filter } = this.props;
+    const { alerting, tracing, metrics, mixed, dashboard, variables, annotations, pluginId, type, filter, logs } =
+      this.props;
+
     const options = this.dataSourceSrv
       .getList({
         alerting,
         tracing,
         metrics,
+        logs,
         dashboard,
         mixed,
         variables,
@@ -136,19 +161,20 @@ export class DataSourcePicker extends PureComponent<DataSourcePickerProps, DataS
   }
 
   render() {
-    const { autoFocus, onBlur, openMenuOnFocus, placeholder, width } = this.props;
+    const { autoFocus, onBlur, onClear, openMenuOnFocus, placeholder, width, inputId } = this.props;
     const { error } = this.state;
     const options = this.getDataSourceOptions();
     const value = this.getCurrentValue();
-    const styles = getStyles();
+    const isClearable = typeof onClear === 'function';
 
     return (
       <div aria-label={selectors.components.DataSourcePicker.container}>
         <Select
-          menuShouldPortal
-          className={styles.select}
+          aria-label={selectors.components.DataSourcePicker.inputV2}
+          inputId={inputId || 'data-source-picker'}
+          className="ds-picker select-container"
           isMulti={false}
-          isClearable={false}
+          isClearable={isClearable}
           backspaceRemovesValue={false}
           onChange={this.onChange}
           options={options}
@@ -176,13 +202,3 @@ export class DataSourcePicker extends PureComponent<DataSourcePickerProps, DataS
     );
   }
 }
-
-const getStyles = stylesFactory(() => ({
-  select: cx(
-    css({
-      minWidth: 200,
-    }),
-    'ds-picker',
-    'select-container'
-  ),
-}));

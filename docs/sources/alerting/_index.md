@@ -1,31 +1,72 @@
-+++
-title = "Alerts"
-weight = 110
-+++
+---
+aliases:
+  - /docs/grafana/latest/alerting/
+  - /docs/grafana/latest/alerting/unified-alerting/alerting/
+  - /docs/grafana/latest/about-alerting
+title: Alerting
+weight: 114
+---
 
-# Grafana alerts
+# Grafana Alerting
 
-Alerts allow you to know about problems in your systems moments after they occur. Robust and actionable alerts help you identify and resolve issues quickly, minimizing disruption to your services.
+Grafana Alerting allows you to learn about problems in your systems moments after they occur. Create, manage, and take action on your alerts in a single, consolidated view, and improve your team’s ability to identify and resolve issues quickly.
 
-Grafana 8.0 has new and improved alerts. The new alerting system is an [opt-in]({{< relref "./unified-alerting/opt-in.md" >}}) feature that centralizes alerting information for Grafana managed alerts and alerts from Prometheus-compatible data sources in one UI and API.
+Grafana Alerting is available for Grafana OSS, Grafana Enterprise, or Grafana Cloud. With Mimir and Loki alert rules you can run alert expressions closer to your data and at massive scale, all managed by the Grafana UI you are already familiar with.
 
-> **Note:** Out of the box, Grafana still supports old [legacy dashboard alerts]({{< relref "./old-alerting/_index.md" >}}). We encourage you to create issues in the Grafana GitHub repository for bugs found while testing Grafana 8 alerts.
+Watch this video to learn more about Grafana Alerting: {{< vimeo 720001629 >}}
 
-Alerts have four main components:
+## Overview
 
-- Alerting rule - One or more query and/or expression, a condition, the frequency of evaluation, and the (optional) duration that a condition must be met before creating an alert.
-- Contact point - A channel for sending notifications when the conditions of an alerting rule are met.
-- Notification policy - A set of matching and grouping criteria used to determine where, and how frequently, to send notifications.
-- Silences - Date and matching criteria used to silence notifications.
+The following diagram gives you an overview of how Grafana Alerting works and introduces you to some of the key concepts that work together and form the core of our flexible and powerful alerting engine.
 
-You can create and edit alerting rules for Grafana managed alerts, Cortex alerts, and Loki alerts as well as see alerting information from prometheus-compatible data sources in a single, searchable view. For more information, on how to create and edit alerts and notifications, refer to [Overview of Grafana 8.0 alerts]({{< relref "../alerting/unified-alerting/_index.md" >}}).
+{{< figure src="/static/img/docs/alerting/unified/about-alerting-flow-diagram-latest.png" caption="Grafana Alerting overview" >}}
 
-For handling notifications for Grafana managed alerts, we use an embedded Alertmanager. You can configure its contact points, notification policies, silences and templates from the new Grafana alerting UI by selecting `Grafana` from the Alertmanager dropdown on the top of the respective tab.
+1. Alert rules
 
-> **Note:** Currently the configuration of this embedded Alertmanager is shared across organisations. Therefore users are advised to use the new Grafana 8 Alerts only if they have one organisation otherwise all contact points, notification policies, silences and templates for Grafana managed alerts will be visible by all organizations.
+   Set evaluation criteria that determines whether an alert instance will fire. An alert rule consists of one or more queries and expressions, a condition, the frequency of evaluation, and optionally, the duration over which the condition is met.
 
-As part of the new alert changes, we have introduced a new data source, Alertmanager, which includes built-in support for Prometheus Alertmanager. It is presently in alpha and it not accessible unless alpha plugins are enabled in Grafana settings. For more information, refer to [Alertmanager data source]({{< relref "../datasources/alertmanager.md" >}}). If such a data source is present, then you can view and modify its silences, contact points and notification policies from the Grafana alerting UI by selecting it from the Alertmanager dropdown on the top of respective tab.
+   Grafana managed alerts support multi-dimensional alerting, which means that each alert rule can create multiple alert instances. This is exceptionally powerful if you are observing multiple series in a single expression.
 
-> **Note:** Out of the box, Grafana still supports old Grafana alerts. They are legacy alerts at this time, and will be deprecated in a future release. For more information, refer to [Legacy Grafana alerts]({{< relref "./old-alerting/_index.md" >}}).
+   Once an alert rule has been created, they go through various states and transitions. The state and health of alert rules help you understand several key status indicators about your alerts.
 
-To learn more about the differences between new alerts and the legacy alerts, refer to [What's New with Grafana 8 Alerts]({{< relref "../alerting/difference-old-new.md" >}}).
+1. Labels
+
+   Match an alert rule and its instances to notification policies and silences. They can also be used to group your alerts by severity.
+
+1. Notification policies
+
+   Set where, when, and how the alerts get routed. Each notification policy specifies a set of label matchers to indicate which alerts they are responsible for. A notification policy has a contact point assigned to it that consists of one or more notifiers.
+
+1. Contact points
+
+   Define how your contacts are notified when an alert fires. We support a multitude of ChatOps tools to ensure the alerts come to your team.
+
+## Features
+
+**One page for all alerts**
+
+A single Grafana Alerting page consolidates both Grafana-managed alerts and alerts that reside in your Prometheus-compatible data source in one single place.
+
+**Multi-dimensional alerts**
+
+Alert rules can create multiple individual alert instances per alert rule, known as multi-dimensional alerts, giving you the power and flexibility to gain visibility into your entire system with just a single alert.
+
+**Routing alerts**
+
+Route each alert instance to a specific contact point based on labels you define. Notification policies are the set of rules for where, when, and how the alerts are routed to contact points.
+
+**Silencing alerts**
+
+Silences allow you to stop receiving persistent notifications from one or more alerting rules. You can also partially pause an alert based on certain criteria. Silences have their own dedicated section for better organization and visibility, so that you can scan your paused alert rules without cluttering the main alerting view.
+
+**Mute timings**
+
+With mute timings, you can specify a time interval when you don’t want new notifications to be generated or sent. You can also freeze alert notifications for recurring periods of time, such as during a maintenance period.
+
+## Useful links
+
+- [Fundamental concepts]({{< relref "fundamentals/" >}}) of Grafana Alerting.
+
+- [Role-based access control]({{< relref "../administration/roles-and-permissions/access-control/" >}}) in Grafana Enterprise.
+
+- [Alertmanager]({{< relref "fundamentals/alertmanager/" >}}) and [High availability]({{< relref "./high-availability/" >}})

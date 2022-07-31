@@ -1,9 +1,19 @@
-import { FieldColorModeId, FieldConfigProperty, PanelPlugin } from '@grafana/data';
-import { StateTimelinePanel } from './StateTimelinePanel';
-import { TimelineOptions, TimelineFieldConfig, defaultPanelOptions, defaultTimelineFieldConfig } from './types';
+import {
+  FieldColorModeId,
+  FieldConfigProperty,
+  FieldType,
+  identityOverrideProcessor,
+  PanelPlugin,
+} from '@grafana/data';
 import { VisibilityMode } from '@grafana/schema';
 import { commonOptionsBuilder } from '@grafana/ui';
+
+import { SpanNullsEditor } from '../timeseries/SpanNullsEditor';
+
+import { StateTimelinePanel } from './StateTimelinePanel';
 import { timelinePanelChangedHandler } from './migrations';
+import { StatTimelineSuggestionsSupplier } from './suggestions';
+import { TimelineOptions, TimelineFieldConfig, defaultPanelOptions, defaultTimelineFieldConfig } from './types';
 
 export const plugin = new PanelPlugin<TimelineOptions, TimelineFieldConfig>(StateTimelinePanel)
   .setPanelChangeHandler(timelinePanelChangedHandler)
@@ -39,6 +49,16 @@ export const plugin = new PanelPlugin<TimelineOptions, TimelineFieldConfig>(Stat
             max: 100,
             step: 1,
           },
+        })
+        .addCustomEditor<void, boolean>({
+          id: 'spanNulls',
+          path: 'spanNulls',
+          name: 'Connect null values',
+          defaultValue: false,
+          editor: SpanNullsEditor,
+          override: SpanNullsEditor,
+          shouldApply: (f) => f.type !== FieldType.time,
+          process: identityOverrideProcessor,
         });
     },
   })
@@ -86,4 +106,6 @@ export const plugin = new PanelPlugin<TimelineOptions, TimelineFieldConfig>(Stat
 
     commonOptionsBuilder.addLegendOptions(builder, false);
     commonOptionsBuilder.addTooltipOptions(builder, true);
-  });
+  })
+  .setSuggestionsSupplier(new StatTimelineSuggestionsSupplier())
+  .setDataSupport({ annotations: true });

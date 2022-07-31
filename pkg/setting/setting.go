@@ -13,13 +13,16 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/grafana/grafana-aws-sdk/pkg/awsds"
+	"github.com/grafana/grafana-azure-sdk-go/azsettings"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/gtime"
+
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/util"
 
@@ -44,12 +47,6 @@ const (
 	Prod             = "production"
 	Test             = "test"
 	ApplicationName  = "Grafana"
-)
-
-// This constant corresponds to the default value for ldap_sync_ttl in .ini files
-// it is used for comparison and has to be kept in sync
-const (
-	authProxySyncTTL = 60
 )
 
 // zoneInfo names environment variable for setting the path to look for the timezone database in go
@@ -141,6 +138,8 @@ var (
 	GoogleTagManagerId      string
 	RudderstackDataPlaneUrl string
 	RudderstackWriteKey     string
+	RudderstackSdkUrl       string
+	RudderstackConfigUrl    string
 
 	// LDAP
 	LDAPEnabled           bool
@@ -153,7 +152,7 @@ var (
 	Quota QuotaSettings
 
 	// Alerting
-	AlertingEnabled            bool
+	AlertingEnabled            *bool
 	ExecuteAlerts              bool
 	AlertingRenderLimit        int
 	AlertingErrorOrTimeout     string
@@ -166,6 +165,12 @@ var (
 
 	// Explore UI
 	ExploreEnabled bool
+
+	// Help UI
+	HelpEnabled bool
+
+	// Profile UI
+	ProfileEnabled bool
 
 	// Grafana.NET URL
 	GrafanaComUrl string
@@ -203,6 +208,7 @@ type Cfg struct {
 	EnforceDomain    bool
 
 	// Security settings
+	SecretKey             string
 	EmailCodeValidMinutes int
 
 	// build
@@ -249,7 +255,8 @@ type Cfg struct {
 	// CSPEnabled toggles Content Security Policy support.
 	CSPEnabled bool
 	// CSPTemplate contains the Content Security Policy template.
-	CSPTemplate string
+	CSPTemplate           string
+	AngularSupportEnabled bool
 
 	TempDataLifetime                 time.Duration
 	PluginsEnableAlpha               bool
@@ -257,6 +264,7 @@ type Cfg struct {
 	PluginSettings                   PluginSettings
 	PluginsAllowUnsigned             []string
 	PluginCatalogURL                 string
+	PluginCatalogHiddenPlugins       []string
 	PluginAdminEnabled               bool
 	PluginAdminExternalManageEnabled bool
 	DisableSanitizeHtml              bool
@@ -278,6 +286,7 @@ type Cfg struct {
 	LoginMaxLifetime             time.Duration
 	TokenRotationIntervalMinutes int
 	SigV4AuthEnabled             bool
+	SigV4VerboseLogging          bool
 	BasicAuthEnabled             bool
 	AdminUser                    string
 	AdminPassword                string
@@ -288,7 +297,7 @@ type Cfg struct {
 	AWSListMetricsPageLimit int
 
 	// Azure Cloud settings
-	Azure AzureSettings
+	Azure *azsettings.AzureSettings
 
 	// Auth proxy settings
 	AuthProxyEnabled          bool
@@ -298,6 +307,7 @@ type Cfg struct {
 	AuthProxyEnableLoginToken bool
 	AuthProxyWhitelist        string
 	AuthProxyHeaders          map[string]string
+	AuthProxyHeadersEncoded   bool
 	AuthProxySyncTTL          int
 
 	// OAuth
@@ -306,6 +316,7 @@ type Cfg struct {
 	// JWT Auth
 	JWTAuthEnabled       bool
 	JWTAuthHeaderName    string
+	JWTAuthURLLogin      bool
 	JWTAuthEmailClaim    string
 	JWTAuthUsernameClaim string
 	JWTAuthExpectClaims  string
@@ -313,6 +324,7 @@ type Cfg struct {
 	JWTAuthCacheTTL      time.Duration
 	JWTAuthKeyFile       string
 	JWTAuthJWKSetFile    string
+	JWTAuthAutoSignUp    bool
 
 	// Dataproxy
 	SendUserHeader                 bool
@@ -335,8 +347,10 @@ type Cfg struct {
 
 	ApiKeyMaxSecondsToLive int64
 
-	// Use to enable new features which may still be in alpha/beta stage.
-	FeatureToggles       map[string]bool
+	// Check if a feature toggle is enabled
+	// @deprecated
+	IsFeatureToggleEnabled func(key string) bool // filled in dynamically
+
 	AnonymousEnabled     bool
 	AnonymousOrgName     string
 	AnonymousOrgRole     string
@@ -347,6 +361,7 @@ type Cfg struct {
 	// User
 	UserInviteMaxLifetime time.Duration
 	HiddenUsers           map[string]struct{}
+	CaseInsensitiveLogin  bool // Login and Email will be considered case insensitive
 
 	// Annotations
 	AnnotationCleanupJobBatchSize      int64
@@ -356,6 +371,9 @@ type Cfg struct {
 
 	// Sentry config
 	Sentry Sentry
+
+	// GrafanaJavascriptAgent config
+	GrafanaJavascriptAgent GrafanaJavascriptAgent
 
 	// Data sources
 	DataSourceLimit int
@@ -367,12 +385,16 @@ type Cfg struct {
 
 	Env string
 
+	ForceMigration bool
+
 	// Analytics
-	CheckForUpdates                     bool
+	CheckForGrafanaUpdates              bool
+	CheckForPluginUpdates               bool
 	ReportingDistributor                string
 	ReportingEnabled                    bool
 	ApplicationInsightsConnectionString string
 	ApplicationInsightsEndpointUrl      string
+	FeedbackLinksEnabled                bool
 
 	// LDAP
 	LDAPEnabled     bool
@@ -380,12 +402,14 @@ type Cfg struct {
 
 	Quota QuotaSettings
 
-	DefaultTheme string
-	HomePage     string
+	DefaultTheme  string
+	DefaultLocale string
+	HomePage      string
 
-	AutoAssignOrg     bool
-	AutoAssignOrgId   int
-	AutoAssignOrgRole string
+	AutoAssignOrg              bool
+	AutoAssignOrgId            int
+	AutoAssignOrgRole          string
+	OAuthSkipOrgRoleUpdateSync bool
 
 	// ExpressionsEnabled specifies whether expressions are enabled.
 	ExpressionsEnabled bool
@@ -408,49 +432,26 @@ type Cfg struct {
 	// Grafana.com URL
 	GrafanaComURL string
 
-	// Alerting
-
-	// AlertingBaseInterval controls the alerting base interval in seconds.
-	// Only for internal use and not user configuration.
-	AlertingBaseInterval time.Duration
-
 	// Geomap base layer config
 	GeomapDefaultBaseLayerConfig map[string]interface{}
 	GeomapEnableCustomBaseLayers bool
 
 	// Unified Alerting
 	UnifiedAlerting UnifiedAlertingSettings
-}
 
-// IsLiveConfigEnabled returns true if live should be able to save configs to SQL tables
-func (cfg Cfg) IsLiveConfigEnabled() bool {
-	return cfg.FeatureToggles["live-config"]
-}
+	// Query history
+	QueryHistoryEnabled bool
 
-// IsNgAlertEnabled returns whether the standalone alerts feature is enabled.
-func (cfg Cfg) IsNgAlertEnabled() bool {
-	return cfg.FeatureToggles["ngalert"]
-}
+	DashboardPreviews DashboardPreviewsSettings
 
-// IsTrimDefaultsEnabled returns whether the standalone trim dashboard default feature is enabled.
-func (cfg Cfg) IsTrimDefaultsEnabled() bool {
-	return cfg.FeatureToggles["trimDefaults"]
-}
+	Storage StorageSettings
 
-// IsDatabaseMetricsEnabled returns whether the database instrumentation feature is enabled.
-func (cfg Cfg) IsDatabaseMetricsEnabled() bool {
-	return cfg.FeatureToggles["database_metrics"]
-}
-
-// IsHTTPRequestHistogramDisabled returns whether the request historgrams is disabled.
-// This feature toggle will be removed in Grafana 8.x but gives the operator
-// some graceperiod to update all the monitoring tools.
-func (cfg Cfg) IsHTTPRequestHistogramDisabled() bool {
-	return cfg.FeatureToggles["disable_http_request_histogram"]
-}
-
-func (cfg Cfg) IsNewNavigationEnabled() bool {
-	return cfg.FeatureToggles["newNavigation"]
+	// Access Control
+	RBACEnabled         bool
+	RBACPermissionCache bool
+	// Undocumented option as a backup in case removing builtin-role assignment
+	// fails
+	RBACBuiltInRoleAssignmentEnabled bool
 }
 
 type CommandLineArgs struct {
@@ -459,7 +460,7 @@ type CommandLineArgs struct {
 	Args     []string
 }
 
-func parseAppUrlAndSubUrl(section *ini.Section) (string, string, error) {
+func (cfg Cfg) parseAppUrlAndSubUrl(section *ini.Section) (string, string, error) {
 	appUrl := valueAsString(section, "root_url", "http://localhost:3000/")
 
 	if appUrl[len(appUrl)-1] != '/' {
@@ -469,7 +470,8 @@ func parseAppUrlAndSubUrl(section *ini.Section) (string, string, error) {
 	// Check if has app suburl.
 	url, err := url.Parse(appUrl)
 	if err != nil {
-		log.Fatalf(4, "Invalid root_url(%s): %s", appUrl, err)
+		cfg.Logger.Error("Invalid root_url.", "url", appUrl, "error", err)
+		os.Exit(1)
 	}
 
 	appSubUrl := strings.TrimSuffix(url.Path, "/")
@@ -491,30 +493,69 @@ func RedactedValue(key, value string) string {
 		"SECRET_KEY",
 		"CERTIFICATE",
 		"ACCOUNT_KEY",
+		"ENCRYPTION_KEY",
+		"VAULT_TOKEN",
 	} {
-		if strings.Contains(uppercased, pattern) {
+		if match, err := regexp.MatchString(pattern, uppercased); match && err == nil {
 			return RedactedPassword
 		}
 	}
-	// Sensitive URLs that might contain username and password
-	for _, pattern := range []string{
-		"DATABASE_URL",
+
+	for _, exception := range []string{
+		"RUDDERSTACK",
+		"APPLICATION_INSIGHTS",
+		"SENTRY",
 	} {
-		if strings.Contains(uppercased, pattern) {
-			if u, err := url.Parse(value); err == nil {
-				return u.Redacted()
-			}
+		if strings.Contains(uppercased, exception) {
+			return value
 		}
 	}
-	// Otherwise return unmodified value
+
+	if u, err := RedactedURL(value); err == nil {
+		return u
+	}
+
 	return value
+}
+
+func RedactedURL(value string) (string, error) {
+	// Value could be a list of URLs
+	chunks := util.SplitString(value)
+
+	for i, chunk := range chunks {
+		var hasTmpPrefix bool
+		const tmpPrefix = "http://"
+
+		if !strings.Contains(chunk, "://") {
+			chunk = tmpPrefix + chunk
+			hasTmpPrefix = true
+		}
+
+		u, err := url.Parse(chunk)
+		if err != nil {
+			return "", err
+		}
+
+		redacted := u.Redacted()
+		if hasTmpPrefix {
+			redacted = strings.Replace(redacted, tmpPrefix, "", 1)
+		}
+
+		chunks[i] = redacted
+	}
+
+	if strings.Contains(value, ",") {
+		return strings.Join(chunks, ","), nil
+	}
+
+	return strings.Join(chunks, " "), nil
 }
 
 func applyEnvVariableOverrides(file *ini.File) error {
 	appliedEnvOverrides = make([]string, 0)
 	for _, section := range file.Sections() {
 		for _, key := range section.Keys() {
-			envKey := envKey(section.Name(), key.Name())
+			envKey := EnvKey(section.Name(), key.Name())
 			envValue := os.Getenv(envKey)
 
 			if len(envValue) > 0 {
@@ -585,7 +626,7 @@ type AnnotationCleanupSettings struct {
 	MaxCount int64
 }
 
-func envKey(sectionName string, keyName string) string {
+func EnvKey(sectionName string, keyName string) string {
 	sN := strings.ToUpper(strings.ReplaceAll(sectionName, ".", "_"))
 	sN = strings.ReplaceAll(sN, "-", "_")
 	kN := strings.ToUpper(strings.ReplaceAll(keyName, ".", "_"))
@@ -625,7 +666,7 @@ func applyCommandLineProperties(props map[string]string, file *ini.File) {
 	}
 }
 
-func getCommandLineProperties(args []string) map[string]string {
+func (cfg Cfg) getCommandLineProperties(args []string) map[string]string {
 	props := make(map[string]string)
 
 	for _, arg := range args {
@@ -636,8 +677,8 @@ func getCommandLineProperties(args []string) map[string]string {
 		trimmed := strings.TrimPrefix(arg, "cfg:")
 		parts := strings.Split(trimmed, "=")
 		if len(parts) != 2 {
-			log.Fatalf(3, "Invalid command line argument. argument: %v", arg)
-			return nil
+			cfg.Logger.Error("Invalid command line argument.", "argument", arg)
+			os.Exit(1)
 		}
 
 		props[parts[0]] = parts[1]
@@ -712,7 +753,7 @@ func (cfg *Cfg) loadConfiguration(args CommandLineArgs) (*ini.File, error) {
 	parsedFile.BlockMode = false
 
 	// command line props
-	commandLineProps := getCommandLineProperties(args.Args)
+	commandLineProps := cfg.getCommandLineProperties(args.Args)
 	// load default overrides
 	applyCommandLineDefaultProperties(commandLineProps, parsedFile)
 
@@ -723,7 +764,8 @@ func (cfg *Cfg) loadConfiguration(args CommandLineArgs) (*ini.File, error) {
 		if err2 != nil {
 			return nil, err2
 		}
-		log.Fatalf(3, err.Error())
+		cfg.Logger.Error(err.Error())
+		os.Exit(1)
 	}
 
 	// apply environment overrides
@@ -749,6 +791,8 @@ func (cfg *Cfg) loadConfiguration(args CommandLineArgs) (*ini.File, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	cfg.Logger.Info(fmt.Sprintf("Starting %s", ApplicationName), "version", BuildVersion, "commit", BuildCommit, "branch", BuildBranch, "compiled", time.Unix(BuildStamp, 0))
 
 	return parsedFile, err
 }
@@ -796,6 +840,7 @@ func NewCfg() *Cfg {
 	return &Cfg{
 		Logger: log.New("settings"),
 		Raw:    ini.Empty(),
+		Azure:  &azsettings.AzureSettings{},
 	}
 }
 
@@ -852,6 +897,7 @@ func (cfg *Cfg) Load(args CommandLineArgs) error {
 
 	Env = valueAsString(iniFile.Section(""), "app_mode", "development")
 	cfg.Env = Env
+	cfg.ForceMigration = iniFile.Section("").Key("force_migration").MustBool(false)
 	InstanceName = valueAsString(iniFile.Section(""), "instance_name", "unknown_instance_name")
 	plugins := valueAsString(iniFile.Section("paths"), "plugins", "")
 	cfg.PluginsPath = makeAbsolute(plugins, HomePath)
@@ -888,6 +934,7 @@ func (cfg *Cfg) Load(args CommandLineArgs) error {
 	if err := readAuthSettings(iniFile, cfg); err != nil {
 		return err
 	}
+	readAccessControlSettings(iniFile, cfg)
 	if err := cfg.readRenderingSettings(iniFile); err != nil {
 		return err
 	}
@@ -899,51 +946,55 @@ func (cfg *Cfg) Load(args CommandLineArgs) error {
 	cfg.MetricsEndpointDisableTotalStats = iniFile.Section("metrics").Key("disable_total_stats").MustBool(false)
 
 	analytics := iniFile.Section("analytics")
-	cfg.CheckForUpdates = analytics.Key("check_for_updates").MustBool(true)
+	cfg.CheckForGrafanaUpdates = analytics.Key("check_for_updates").MustBool(true)
+	cfg.CheckForPluginUpdates = analytics.Key("check_for_plugin_updates").MustBool(true)
 	GoogleAnalyticsId = analytics.Key("google_analytics_ua_id").String()
 	GoogleTagManagerId = analytics.Key("google_tag_manager_id").String()
 	RudderstackWriteKey = analytics.Key("rudderstack_write_key").String()
 	RudderstackDataPlaneUrl = analytics.Key("rudderstack_data_plane_url").String()
+	RudderstackSdkUrl = analytics.Key("rudderstack_sdk_url").String()
+	RudderstackConfigUrl = analytics.Key("rudderstack_config_url").String()
+
 	cfg.ReportingEnabled = analytics.Key("reporting_enabled").MustBool(true)
 	cfg.ReportingDistributor = analytics.Key("reporting_distributor").MustString("grafana-labs")
+
 	if len(cfg.ReportingDistributor) >= 100 {
 		cfg.ReportingDistributor = cfg.ReportingDistributor[:100]
 	}
+
 	cfg.ApplicationInsightsConnectionString = analytics.Key("application_insights_connection_string").String()
 	cfg.ApplicationInsightsEndpointUrl = analytics.Key("application_insights_endpoint_url").String()
+	cfg.FeedbackLinksEnabled = analytics.Key("feedback_links_enabled").MustBool(true)
 
 	if err := readAlertingSettings(iniFile); err != nil {
-		return err
-	}
-	if err := cfg.ReadUnifiedAlertingSettings(iniFile); err != nil {
 		return err
 	}
 
 	explore := iniFile.Section("explore")
 	ExploreEnabled = explore.Key("enabled").MustBool(true)
 
+	help := iniFile.Section("help")
+	HelpEnabled = help.Key("enabled").MustBool(true)
+
+	profile := iniFile.Section("profile")
+	ProfileEnabled = profile.Key("enabled").MustBool(true)
+
+	queryHistory := iniFile.Section("query_history")
+	cfg.QueryHistoryEnabled = queryHistory.Key("enabled").MustBool(true)
+
 	panelsSection := iniFile.Section("panels")
 	cfg.DisableSanitizeHtml = panelsSection.Key("disable_sanitize_html").MustBool(false)
 
-	pluginsSection := iniFile.Section("plugins")
-	cfg.PluginsEnableAlpha = pluginsSection.Key("enable_alpha").MustBool(false)
-	cfg.PluginsAppsSkipVerifyTLS = pluginsSection.Key("app_tls_skip_verify_insecure").MustBool(false)
-	cfg.PluginSettings = extractPluginSettings(iniFile.Sections())
-	pluginsAllowUnsigned := pluginsSection.Key("allow_loading_unsigned_plugins").MustString("")
-	for _, plug := range strings.Split(pluginsAllowUnsigned, ",") {
-		plug = strings.TrimSpace(plug)
-		cfg.PluginsAllowUnsigned = append(cfg.PluginsAllowUnsigned, plug)
+	if err := cfg.readPluginSettings(iniFile); err != nil {
+		return err
 	}
-	cfg.PluginCatalogURL = pluginsSection.Key("plugin_catalog_url").MustString("https://grafana.com/grafana/plugins/")
-	cfg.PluginAdminEnabled = pluginsSection.Key("plugin_admin_enabled").MustBool(false)
-	cfg.PluginAdminExternalManageEnabled = pluginsSection.Key("plugin_admin_external_manage_enabled").MustBool(false)
 
-	// Read and populate feature toggles list
-	featureTogglesSection := iniFile.Section("feature_toggles")
-	cfg.FeatureToggles = make(map[string]bool)
-	featuresTogglesStr := valueAsString(featureTogglesSection, "enable", "")
-	for _, feature := range util.SplitString(featuresTogglesStr) {
-		cfg.FeatureToggles[feature] = true
+	if err := cfg.readFeatureToggles(iniFile); err != nil {
+		return err
+	}
+
+	if err := cfg.ReadUnifiedAlertingSettings(iniFile); err != nil {
+		return err
 	}
 
 	// check old location for this option
@@ -965,8 +1016,11 @@ func (cfg *Cfg) Load(args CommandLineArgs) error {
 
 	cfg.readDataSourcesSettings()
 
+	cfg.DashboardPreviews = readDashboardPreviewsSettings(iniFile)
+	cfg.Storage = readStorageSettings(iniFile)
+
 	if VerifyEmailEnabled && !cfg.Smtp.Enabled {
-		log.Warnf("require_email_validation is enabled but smtp is disabled")
+		cfg.Logger.Warn("require_email_validation is enabled but smtp is disabled")
 	}
 
 	// check old key  name
@@ -1007,6 +1061,7 @@ func (cfg *Cfg) Load(args CommandLineArgs) error {
 
 	cfg.readDateFormats()
 	cfg.readSentryConfig()
+	cfg.readGrafanaJavascriptAgentConfig()
 
 	if err := cfg.readLiveSettings(iniFile); err != nil {
 		return err
@@ -1119,7 +1174,7 @@ type DynamicSection struct {
 // Key dynamically overrides keys with environment variables.
 // As a side effect, the value of the setting key will be updated if an environment variable is present.
 func (s *DynamicSection) Key(k string) *ini.Key {
-	envKey := envKey(s.section.Name(), k)
+	envKey := EnvKey(s.section.Name(), k)
 	envValue := os.Getenv(envKey)
 	key := s.section.Key(k)
 
@@ -1142,6 +1197,7 @@ func (cfg *Cfg) SectionWithEnvOverrides(s string) *DynamicSection {
 func readSecuritySettings(iniFile *ini.File, cfg *Cfg) error {
 	security := iniFile.Section("security")
 	SecretKey = valueAsString(security, "secret_key", "")
+	cfg.SecretKey = SecretKey
 	DisableGravatar = security.Key("disable_gravatar").MustBool(true)
 	cfg.DisableBruteForceLoginProtection = security.Key("disable_brute_force_login_protection").MustBool(false)
 
@@ -1178,6 +1234,7 @@ func readSecuritySettings(iniFile *ini.File, cfg *Cfg) error {
 	cfg.StrictTransportSecuritySubDomains = security.Key("strict_transport_security_subdomains").MustBool(false)
 	cfg.CSPEnabled = security.Key("content_security_policy").MustBool(false)
 	cfg.CSPTemplate = security.Key("content_security_policy_template").MustString("")
+	cfg.AngularSupportEnabled = security.Key("angular_support_enabled").MustBool(true)
 
 	// read data source proxy whitelist
 	DataProxyWhiteList = make(map[string]bool)
@@ -1199,27 +1256,16 @@ func readAuthSettings(iniFile *ini.File, cfg *Cfg) (err error) {
 	auth := iniFile.Section("auth")
 
 	cfg.LoginCookieName = valueAsString(auth, "login_cookie_name", "grafana_session")
-	maxInactiveDaysVal := auth.Key("login_maximum_inactive_lifetime_days").MustString("")
-	if maxInactiveDaysVal != "" {
-		maxInactiveDaysVal = fmt.Sprintf("%sd", maxInactiveDaysVal)
-		cfg.Logger.Warn("[Deprecated] the configuration setting 'login_maximum_inactive_lifetime_days' is deprecated, please use 'login_maximum_inactive_lifetime_duration' instead")
-	} else {
-		maxInactiveDaysVal = "7d"
-	}
-	maxInactiveDurationVal := valueAsString(auth, "login_maximum_inactive_lifetime_duration", maxInactiveDaysVal)
+
+	const defaultMaxInactiveLifetime = "7d"
+	maxInactiveDurationVal := valueAsString(auth, "login_maximum_inactive_lifetime_duration", defaultMaxInactiveLifetime)
 	cfg.LoginMaxInactiveLifetime, err = gtime.ParseDuration(maxInactiveDurationVal)
 	if err != nil {
 		return err
 	}
 
-	maxLifetimeDaysVal := auth.Key("login_maximum_lifetime_days").MustString("")
-	if maxLifetimeDaysVal != "" {
-		maxLifetimeDaysVal = fmt.Sprintf("%sd", maxLifetimeDaysVal)
-		cfg.Logger.Warn("[Deprecated] the configuration setting 'login_maximum_lifetime_days' is deprecated, please use 'login_maximum_lifetime_duration' instead")
-	} else {
-		maxLifetimeDaysVal = "30d"
-	}
-	maxLifetimeDurationVal := valueAsString(auth, "login_maximum_lifetime_duration", maxLifetimeDaysVal)
+	const defaultMaxLifetime = "30d"
+	maxLifetimeDurationVal := valueAsString(auth, "login_maximum_lifetime_duration", defaultMaxLifetime)
 	cfg.LoginMaxLifetime, err = gtime.ParseDuration(maxLifetimeDurationVal)
 	if err != nil {
 		return err
@@ -1237,10 +1283,12 @@ func readAuthSettings(iniFile *ini.File, cfg *Cfg) (err error) {
 	OAuthAutoLogin = auth.Key("oauth_auto_login").MustBool(false)
 	cfg.OAuthCookieMaxAge = auth.Key("oauth_state_cookie_max_age").MustInt(600)
 	SignoutRedirectUrl = valueAsString(auth, "signout_redirect_url", "")
+	cfg.OAuthSkipOrgRoleUpdateSync = auth.Key("oauth_skip_org_role_update_sync").MustBool(false)
 
 	// SigV4
 	SigV4AuthEnabled = auth.Key("sigv4_auth_enabled").MustBool(false)
 	cfg.SigV4AuthEnabled = SigV4AuthEnabled
+	cfg.SigV4VerboseLogging = auth.Key("sigv4_verbose_logging").MustBool(false)
 
 	// anonymous access
 	AnonymousEnabled = iniFile.Section("auth.anonymous").Key("enabled").MustBool(false)
@@ -1258,6 +1306,7 @@ func readAuthSettings(iniFile *ini.File, cfg *Cfg) (err error) {
 	authJWT := iniFile.Section("auth.jwt")
 	cfg.JWTAuthEnabled = authJWT.Key("enabled").MustBool(false)
 	cfg.JWTAuthHeaderName = valueAsString(authJWT, "header_name", "")
+	cfg.JWTAuthURLLogin = authJWT.Key("url_login").MustBool(false)
 	cfg.JWTAuthEmailClaim = valueAsString(authJWT, "email_claim", "")
 	cfg.JWTAuthUsernameClaim = valueAsString(authJWT, "username_claim", "")
 	cfg.JWTAuthExpectClaims = valueAsString(authJWT, "expect_claims", "{}")
@@ -1265,6 +1314,7 @@ func readAuthSettings(iniFile *ini.File, cfg *Cfg) (err error) {
 	cfg.JWTAuthCacheTTL = authJWT.Key("cache_ttl").MustDuration(time.Minute * 60)
 	cfg.JWTAuthKeyFile = valueAsString(authJWT, "key_file", "")
 	cfg.JWTAuthJWKSetFile = valueAsString(authJWT, "jwk_set_file", "")
+	cfg.JWTAuthAutoSignUp = authJWT.Key("auto_sign_up").MustBool(false)
 
 	authProxy := iniFile.Section("auth.proxy")
 	AuthProxyEnabled = authProxy.Key("enabled").MustBool(false)
@@ -1276,15 +1326,7 @@ func readAuthSettings(iniFile *ini.File, cfg *Cfg) (err error) {
 	cfg.AuthProxyAutoSignUp = authProxy.Key("auto_sign_up").MustBool(true)
 	cfg.AuthProxyEnableLoginToken = authProxy.Key("enable_login_token").MustBool(false)
 
-	ldapSyncVal := authProxy.Key("ldap_sync_ttl").MustInt()
-	syncVal := authProxy.Key("sync_ttl").MustInt()
-
-	if ldapSyncVal != authProxySyncTTL {
-		cfg.AuthProxySyncTTL = ldapSyncVal
-		cfg.Logger.Warn("[Deprecated] the configuration setting 'ldap_sync_ttl' is deprecated, please use 'sync_ttl' instead")
-	} else {
-		cfg.AuthProxySyncTTL = syncVal
-	}
+	cfg.AuthProxySyncTTL = authProxy.Key("sync_ttl").MustInt()
 
 	cfg.AuthProxyWhitelist = valueAsString(authProxy, "whitelist", "")
 
@@ -1298,7 +1340,16 @@ func readAuthSettings(iniFile *ini.File, cfg *Cfg) (err error) {
 		}
 	}
 
+	cfg.AuthProxyHeadersEncoded = authProxy.Key("headers_encoded").MustBool(false)
+
 	return nil
+}
+
+func readAccessControlSettings(iniFile *ini.File, cfg *Cfg) {
+	rbac := iniFile.Section("rbac")
+	cfg.RBACEnabled = rbac.Key("enabled").MustBool(true)
+	cfg.RBACPermissionCache = rbac.Key("permission_cache").MustBool(true)
+	cfg.RBACBuiltInRoleAssignmentEnabled = rbac.Key("builtin_role_assignment_enabled").MustBool(false)
 }
 
 func readUserSettings(iniFile *ini.File, cfg *Cfg) error {
@@ -1313,9 +1364,12 @@ func readUserSettings(iniFile *ini.File, cfg *Cfg) error {
 	AutoAssignOrgRole = cfg.AutoAssignOrgRole
 	VerifyEmailEnabled = users.Key("verify_email_enabled").MustBool(false)
 
+	cfg.CaseInsensitiveLogin = users.Key("case_insensitive_login").MustBool(false)
+
 	LoginHint = valueAsString(users, "login_hint", "")
 	PasswordHint = valueAsString(users, "password_hint", "")
 	cfg.DefaultTheme = valueAsString(users, "default_theme", "")
+	cfg.DefaultLocale = valueAsString(users, "default_locale", "")
 	cfg.HomePage = valueAsString(users, "home_page", "")
 	ExternalUserMngLinkUrl = valueAsString(users, "external_manage_link_url", "")
 	ExternalUserMngLinkName = valueAsString(users, "external_manage_link_name", "")
@@ -1361,7 +1415,8 @@ func (cfg *Cfg) readRenderingSettings(iniFile *ini.File) error {
 		_, err := url.Parse(cfg.RendererCallbackUrl)
 		if err != nil {
 			// XXX: Should return an error?
-			log.Fatalf(4, "Invalid callback_url(%s): %s", cfg.RendererCallbackUrl, err)
+			cfg.Logger.Error("Invalid callback_url.", "url", cfg.RendererCallbackUrl, "error", err)
+			os.Exit(1)
 		}
 	}
 
@@ -1374,7 +1429,11 @@ func (cfg *Cfg) readRenderingSettings(iniFile *ini.File) error {
 
 func readAlertingSettings(iniFile *ini.File) error {
 	alerting := iniFile.Section("alerting")
-	AlertingEnabled = alerting.Key("enabled").MustBool(true)
+	enabled, err := alerting.Key("enabled").Bool()
+	AlertingEnabled = nil
+	if err == nil {
+		AlertingEnabled = &enabled
+	}
 	ExecuteAlerts = alerting.Key("execute_alerts").MustBool(true)
 	AlertingRenderLimit = alerting.Key("concurrent_render_limit").MustInt(5)
 
@@ -1389,6 +1448,12 @@ func readAlertingSettings(iniFile *ini.File) error {
 	AlertingMinInterval = alerting.Key("min_interval_seconds").MustInt64(1)
 
 	return nil
+}
+
+// IsLegacyAlertingEnabled returns whether the legacy alerting is enabled or not.
+// It's safe to be used only after readAlertingSettings() and ReadUnifiedAlertingSettings() are executed.
+func IsLegacyAlertingEnabled() bool {
+	return AlertingEnabled != nil && *AlertingEnabled
 }
 
 func readSnapshotsSettings(cfg *Cfg, iniFile *ini.File) error {
@@ -1407,7 +1472,7 @@ func readSnapshotsSettings(cfg *Cfg, iniFile *ini.File) error {
 func (cfg *Cfg) readServerSettings(iniFile *ini.File) error {
 	server := iniFile.Section("server")
 	var err error
-	AppUrl, AppSubUrl, err = parseAppUrlAndSubUrl(server)
+	AppUrl, AppSubUrl, err = cfg.parseAppUrlAndSubUrl(server)
 	if err != nil {
 		return err
 	}

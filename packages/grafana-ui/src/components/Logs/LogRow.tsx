@@ -1,4 +1,6 @@
+import { cx, css } from '@emotion/css';
 import React, { PureComponent } from 'react';
+
 import {
   Field,
   LinkModel,
@@ -11,10 +13,14 @@ import {
   escapeUnescapedString,
   GrafanaTheme2,
 } from '@grafana/data';
+
+import { styleMixins, withTheme2 } from '../../themes/index';
+import { Themeable2 } from '../../types/theme';
 import { Icon } from '../Icon/Icon';
 import { Tooltip } from '../Tooltip/Tooltip';
-import { cx, css } from '@emotion/css';
 
+import { LogDetails } from './LogDetails';
+import { LogLabels } from './LogLabels';
 import {
   LogRowContextRows,
   LogRowContextQueryErrors,
@@ -22,15 +28,11 @@ import {
   LogRowContextProvider,
   RowContextOptions,
 } from './LogRowContextProvider';
-import { Themeable2 } from '../../types/theme';
-import { styleMixins, withTheme2 } from '../../themes/index';
+import { LogRowMessage } from './LogRowMessage';
+import { LogRowMessageDetectedFields } from './LogRowMessageDetectedFields';
 import { getLogRowStyles } from './getLogRowStyles';
 
 //Components
-import { LogDetails } from './LogDetails';
-import { LogRowMessageDetectedFields } from './LogRowMessageDetectedFields';
-import { LogRowMessage } from './LogRowMessage';
-import { LogLabels } from './LogLabels';
 
 interface Props extends Themeable2 {
   row: LogRowModel;
@@ -53,6 +55,7 @@ interface Props extends Themeable2 {
   showContextToggle?: (row?: LogRowModel) => boolean;
   onClickShowDetectedField?: (key: string) => void;
   onClickHideDetectedField?: (key: string) => void;
+  onLogRowHover?: (row?: LogRowModel) => void;
 }
 
 interface State {
@@ -64,8 +67,7 @@ const getStyles = (theme: GrafanaTheme2) => {
   return {
     topVerticalAlign: css`
       label: topVerticalAlign;
-      vertical-align: top;
-      margin-top: -${theme.spacing(0.5)};
+      margin-top: -${theme.spacing(0.9)};
       margin-left: -${theme.spacing(0.25)};
     `,
     detailsOpen: css`
@@ -141,6 +143,7 @@ class UnThemedLogRow extends PureComponent<Props, State> {
       theme,
       getFieldLinks,
       forceEscape,
+      onLogRowHover,
     } = this.props;
     const { showDetails, showContext } = this.state;
     const style = getLogRowStyles(theme, row.logLevel);
@@ -157,7 +160,16 @@ class UnThemedLogRow extends PureComponent<Props, State> {
 
     return (
       <>
-        <tr className={logRowBackground} onClick={this.toggleDetails}>
+        <tr
+          className={logRowBackground}
+          onClick={this.toggleDetails}
+          onMouseEnter={() => {
+            onLogRowHover && onLogRowHover(row);
+          }}
+          onMouseLeave={() => {
+            onLogRowHover && onLogRowHover(undefined);
+          }}
+        >
           {showDuplicates && (
             <td className={style.logsRowDuplicates}>
               {processedRow.duplicates && processedRow.duplicates > 0 ? `${processedRow.duplicates + 1}x` : null}

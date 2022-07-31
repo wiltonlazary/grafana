@@ -1,13 +1,17 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useDispatch } from 'react-redux';
+import { useAsync } from 'react-use';
+
 import { CombinedRule, RuleIdentifier, RuleNamespace } from 'app/types/unified-alerting';
-import { AsyncRequestMapSlice, AsyncRequestState, initialAsyncRequestState } from '../utils/redux';
-import { useCombinedRuleNamespaces } from './useCombinedRuleNamespaces';
-import { useUnifiedAlertingSelector } from './useUnifiedAlertingSelector';
-import { fetchPromRulesAction, fetchRulerRulesAction } from '../state/actions';
 import { RulerRulesConfigDTO } from 'app/types/unified-alerting-dto';
+
+import { fetchPromAndRulerRulesAction } from '../state/actions';
+import { AsyncRequestMapSlice, AsyncRequestState, initialAsyncRequestState } from '../utils/redux';
 import * as ruleId from '../utils/rule-id';
 import { isRulerNotSupportedResponse } from '../utils/rules';
+
+import { useCombinedRuleNamespaces } from './useCombinedRuleNamespaces';
+import { useUnifiedAlertingSelector } from './useUnifiedAlertingSelector';
 
 export function useCombinedRule(
   identifier: RuleIdentifier | undefined,
@@ -75,24 +79,23 @@ export function useCombinedRulesMatching(
   };
 }
 
-function useCombinedRulesLoader(ruleSourceName: string | undefined): AsyncRequestState<void> {
+function useCombinedRulesLoader(rulesSourceName: string | undefined): AsyncRequestState<void> {
   const dispatch = useDispatch();
   const promRuleRequests = useUnifiedAlertingSelector((state) => state.promRules);
-  const promRuleRequest = getRequestState(ruleSourceName, promRuleRequests);
+  const promRuleRequest = getRequestState(rulesSourceName, promRuleRequests);
   const rulerRuleRequests = useUnifiedAlertingSelector((state) => state.rulerRules);
-  const rulerRuleRequest = getRequestState(ruleSourceName, rulerRuleRequests);
+  const rulerRuleRequest = getRequestState(rulesSourceName, rulerRuleRequests);
 
-  useEffect(() => {
-    if (!ruleSourceName) {
+  const { loading } = useAsync(async () => {
+    if (!rulesSourceName) {
       return;
     }
 
-    dispatch(fetchPromRulesAction(ruleSourceName));
-    dispatch(fetchRulerRulesAction(ruleSourceName));
-  }, [dispatch, ruleSourceName]);
+    await dispatch(fetchPromAndRulerRulesAction({ rulesSourceName }));
+  }, [dispatch, rulesSourceName]);
 
   return {
-    loading: promRuleRequest.loading || rulerRuleRequest.loading,
+    loading,
     error: promRuleRequest.error ?? isRulerNotSupportedResponse(rulerRuleRequest) ? undefined : rulerRuleRequest.error,
     dispatched: promRuleRequest.dispatched && rulerRuleRequest.dispatched,
   };

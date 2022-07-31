@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/grafana/grafana/pkg/infra/usagestats/statscollector"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 
 	"github.com/grafana/grafana/pkg/api"
@@ -22,6 +23,7 @@ import (
 	"github.com/grafana/grafana/pkg/login/social"
 	"github.com/grafana/grafana/pkg/registry"
 	"github.com/grafana/grafana/pkg/services/provisioning"
+	secretsMigrations "github.com/grafana/grafana/pkg/services/secrets/kvstore/migrations"
 
 	"github.com/grafana/grafana/pkg/setting"
 	"golang.org/x/sync/errgroup"
@@ -40,8 +42,11 @@ type Options struct {
 // New returns a new instance of Server.
 func New(opts Options, cfg *setting.Cfg, httpServer *api.HTTPServer, roleRegistry accesscontrol.RoleRegistry,
 	provisioningService provisioning.ProvisioningService, backgroundServiceProvider registry.BackgroundServiceRegistry,
+	usageStatsProvidersRegistry registry.UsageStatsProvidersRegistry, statsCollectorService *statscollector.Service,
+	secretMigrationService secretsMigrations.SecretMigrationService,
 ) (*Server, error) {
-	s, err := newServer(opts, cfg, httpServer, roleRegistry, provisioningService, backgroundServiceProvider)
+	statsCollectorService.RegisterProviders(usageStatsProvidersRegistry.GetServices())
+	s, err := newServer(opts, cfg, httpServer, roleRegistry, provisioningService, backgroundServiceProvider, secretMigrationService)
 	if err != nil {
 		return nil, err
 	}
@@ -55,25 +60,27 @@ func New(opts Options, cfg *setting.Cfg, httpServer *api.HTTPServer, roleRegistr
 
 func newServer(opts Options, cfg *setting.Cfg, httpServer *api.HTTPServer, roleRegistry accesscontrol.RoleRegistry,
 	provisioningService provisioning.ProvisioningService, backgroundServiceProvider registry.BackgroundServiceRegistry,
+	secretMigrationService secretsMigrations.SecretMigrationService,
 ) (*Server, error) {
 	rootCtx, shutdownFn := context.WithCancel(context.Background())
 	childRoutines, childCtx := errgroup.WithContext(rootCtx)
 
 	s := &Server{
-		context:             childCtx,
-		childRoutines:       childRoutines,
-		HTTPServer:          httpServer,
-		provisioningService: provisioningService,
-		roleRegistry:        roleRegistry,
-		shutdownFn:          shutdownFn,
-		shutdownFinished:    make(chan struct{}),
-		log:                 log.New("server"),
-		cfg:                 cfg,
-		pidFile:             opts.PidFile,
-		version:             opts.Version,
-		commit:              opts.Commit,
-		buildBranch:         opts.BuildBranch,
-		backgroundServices:  backgroundServiceProvider.GetServices(),
+		context:                childCtx,
+		childRoutines:          childRoutines,
+		HTTPServer:             httpServer,
+		provisioningService:    provisioningService,
+		roleRegistry:           roleRegistry,
+		shutdownFn:             shutdownFn,
+		shutdownFinished:       make(chan struct{}),
+		log:                    log.New("server"),
+		cfg:                    cfg,
+		pidFile:                opts.PidFile,
+		version:                opts.Version,
+		commit:                 opts.Commit,
+		buildBranch:            opts.BuildBranch,
+		backgroundServices:     backgroundServiceProvider.GetServices(),
+		secretMigrationService: secretMigrationService,
 	}
 
 	return s, nil
@@ -97,9 +104,10 @@ type Server struct {
 	buildBranch        string
 	backgroundServices []registry.BackgroundService
 
-	HTTPServer          *api.HTTPServer
-	roleRegistry        accesscontrol.RoleRegistry
-	provisioningService provisioning.ProvisioningService
+	HTTPServer             *api.HTTPServer
+	roleRegistry           accesscontrol.RoleRegistry
+	provisioningService    provisioning.ProvisioningService
+	secretMigrationService secretsMigrations.SecretMigrationService
 }
 
 // init initializes the server and its services.
@@ -117,14 +125,18 @@ func (s *Server) init() error {
 		return err
 	}
 
-	login.Init()
+	login.ProvideService(s.HTTPServer.SQLStore, s.HTTPServer.Login)
 	social.ProvideService(s.cfg)
 
-	if err := s.roleRegistry.RegisterFixedRoles(); err != nil {
+	if err := s.roleRegistry.RegisterFixedRoles(s.context); err != nil {
 		return err
 	}
 
-	return s.provisioningService.RunInitProvisioners()
+	if err := s.secretMigrationService.Migrate(s.context); err != nil {
+		return err
+	}
+
+	return s.provisioningService.RunInitProvisioners(s.context)
 }
 
 // Run initializes and starts services. This will block until all services have
@@ -152,16 +164,16 @@ func (s *Server) Run() error {
 				return s.context.Err()
 			default:
 			}
-			s.log.Debug("Starting background service " + serviceName)
+			s.log.Debug("Starting background service", "service", serviceName)
 			err := service.Run(s.context)
 			// Do not return context.Canceled error since errgroup.Group only
 			// returns the first error to the caller - thus we can miss a more
 			// interesting error.
 			if err != nil && !errors.Is(err, context.Canceled) {
-				s.log.Error("Stopped background service "+serviceName, "reason", err)
+				s.log.Error("Stopped background service", "service", serviceName, "reason", err)
 				return fmt.Errorf("%s run error: %w", serviceName, err)
 			}
-			s.log.Debug("Stopped background service "+serviceName, "reason", err)
+			s.log.Debug("Stopped background service", "service", serviceName, "reason", err)
 			return nil
 		})
 	}

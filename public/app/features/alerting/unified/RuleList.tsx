@@ -1,38 +1,46 @@
-import { GrafanaTheme2, urlUtil } from '@grafana/data';
-import { useStyles2, LinkButton, withErrorBoundary } from '@grafana/ui';
-import React, { useEffect, useMemo } from 'react';
+import { css } from '@emotion/css';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch } from 'react-redux';
+import { useLocation } from 'react-router-dom';
+
+import { GrafanaTheme2, urlUtil } from '@grafana/data';
+import { Button, LinkButton, useStyles2, withErrorBoundary } from '@grafana/ui';
+import { useQueryParams } from 'app/core/hooks/useQueryParams';
+
 import { AlertingPageWrapper } from './components/AlertingPageWrapper';
 import { NoRulesSplash } from './components/rules/NoRulesCTA';
-import { useUnifiedAlertingSelector } from './hooks/useUnifiedAlertingSelector';
-import { useFilteredRules } from './hooks/useFilteredRules';
-import { fetchAllPromAndRulerRulesAction } from './state/actions';
-import { getAllRulesSourceNames } from './utils/datasource';
-import { css } from '@emotion/css';
-import { useCombinedRuleNamespaces } from './hooks/useCombinedRuleNamespaces';
-import { RULE_LIST_POLL_INTERVAL_MS } from './utils/constants';
-import RulesFilter from './components/rules/RulesFilter';
+import { RuleListErrors } from './components/rules/RuleListErrors';
 import { RuleListGroupView } from './components/rules/RuleListGroupView';
 import { RuleListStateView } from './components/rules/RuleListStateView';
-import { useQueryParams } from 'app/core/hooks/useQueryParams';
-import { useLocation } from 'react-router-dom';
-import { contextSrv } from 'app/core/services/context_srv';
 import { RuleStats } from './components/rules/RuleStats';
-import { RuleListErrors } from './components/rules/RuleListErrors';
+import RulesFilter from './components/rules/RulesFilter';
+import { useCombinedRuleNamespaces } from './hooks/useCombinedRuleNamespaces';
+import { useFilteredRules } from './hooks/useFilteredRules';
+import { useUnifiedAlertingSelector } from './hooks/useUnifiedAlertingSelector';
+import { fetchAllPromAndRulerRulesAction } from './state/actions';
+import { useRulesAccess } from './utils/accessControlHooks';
+import { RULE_LIST_POLL_INTERVAL_MS } from './utils/constants';
+import { getAllRulesSourceNames } from './utils/datasource';
+import { getFiltersFromUrlParams } from './utils/misc';
 
 const VIEWS = {
   groups: RuleListGroupView,
   state: RuleListStateView,
 };
 
-export const RuleList = withErrorBoundary(
+const RuleList = withErrorBoundary(
   () => {
     const dispatch = useDispatch();
     const styles = useStyles2(getStyles);
     const rulesDataSourceNames = useMemo(getAllRulesSourceNames, []);
     const location = useLocation();
+    const [expandAll, setExpandAll] = useState(false);
 
     const [queryParams] = useQueryParams();
+    const filters = getFiltersFromUrlParams(queryParams);
+    const filtersActive = Object.values(filters).some((filter) => filter !== undefined);
+
+    const { canCreateGrafanaRules, canCreateCloudRules } = useRulesAccess();
 
     const view = VIEWS[queryParams['view'] as keyof typeof VIEWS]
       ? (queryParams['view'] as keyof typeof VIEWS)
@@ -76,9 +84,20 @@ export const RuleList = withErrorBoundary(
             <RulesFilter />
             <div className={styles.break} />
             <div className={styles.buttonsContainer}>
-              <RuleStats showInactive={true} showRecording={true} namespaces={filteredNamespaces} />
-              <div />
-              {(contextSrv.hasEditPermissionInFolders || contextSrv.isEditor) && (
+              <div className={styles.statsContainer}>
+                {view === 'groups' && filtersActive && (
+                  <Button
+                    className={styles.expandAllButton}
+                    icon={expandAll ? 'angle-double-up' : 'angle-double-down'}
+                    variant="secondary"
+                    onClick={() => setExpandAll(!expandAll)}
+                  >
+                    {expandAll ? 'Collapse all' : 'Expand all'}
+                  </Button>
+                )}
+                <RuleStats showInactive={true} showRecording={true} namespaces={filteredNamespaces} />
+              </div>
+              {(canCreateGrafanaRules || canCreateCloudRules) && (
                 <LinkButton
                   href={urlUtil.renderUrl('alerting/new', { returnTo: location.pathname + location.search })}
                   icon="plus"
@@ -90,7 +109,7 @@ export const RuleList = withErrorBoundary(
           </>
         )}
         {showNewAlertSplash && <NoRulesSplash />}
-        {haveResults && <ViewComponent namespaces={filteredNamespaces} />}
+        {haveResults && <ViewComponent expandAll={expandAll} namespaces={filteredNamespaces} />}
       </AlertingPageWrapper>
     );
   },
@@ -109,4 +128,14 @@ const getStyles = (theme: GrafanaTheme2) => ({
     display: flex;
     justify-content: space-between;
   `,
+  statsContainer: css`
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  `,
+  expandAllButton: css`
+    margin-right: ${theme.spacing(1)};
+  `,
 });
+
+export default RuleList;

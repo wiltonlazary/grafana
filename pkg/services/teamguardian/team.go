@@ -1,34 +1,17 @@
 package teamguardian
 
 import (
-	"github.com/grafana/grafana/pkg/bus"
+	"context"
+
 	"github.com/grafana/grafana/pkg/models"
 )
 
-func CanAdmin(bus bus.Bus, orgId int64, teamId int64, user *models.SignedInUser) error {
-	if user.OrgRole == models.ROLE_ADMIN {
-		return nil
-	}
+type TeamGuardian interface {
+	CanAdmin(context.Context, int64, int64, *models.SignedInUser) error
+	DeleteByUser(context.Context, int64) error
+}
 
-	if user.OrgId != orgId {
-		return models.ErrNotAllowedToUpdateTeamInDifferentOrg
-	}
-
-	cmd := models.GetTeamMembersQuery{
-		OrgId:  orgId,
-		TeamId: teamId,
-		UserId: user.UserId,
-	}
-
-	if err := bus.Dispatch(&cmd); err != nil {
-		return err
-	}
-
-	for _, member := range cmd.Result {
-		if member.UserId == user.UserId && member.Permission == models.PERMISSION_ADMIN {
-			return nil
-		}
-	}
-
-	return models.ErrNotAllowedToUpdateTeam
+type Store interface {
+	GetTeamMembers(context.Context, models.GetTeamMembersQuery) ([]*models.TeamMemberDTO, error)
+	DeleteByUser(context.Context, int64) error
 }

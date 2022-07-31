@@ -1,13 +1,17 @@
+import React, { FC, useMemo } from 'react';
+
 import { useQueryParams } from 'app/core/hooks/useQueryParams';
 import { CombinedRule, CombinedRuleNamespace } from 'app/types/unified-alerting';
 import { PromAlertingRuleState } from 'app/types/unified-alerting-dto';
-import React, { FC, useMemo } from 'react';
+
 import { getFiltersFromUrlParams } from '../../utils/misc';
 import { isAlertingRule } from '../../utils/rules';
+
 import { RuleListStateSection } from './RuleListStateSection';
 
 interface Props {
   namespaces: CombinedRuleNamespace[];
+  expandAll?: boolean;
 }
 
 type GroupedRules = Record<PromAlertingRuleState, CombinedRule[]>;

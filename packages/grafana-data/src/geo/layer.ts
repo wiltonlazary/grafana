@@ -1,10 +1,12 @@
-import { RegistryItemWithOptions } from '../utils/Registry';
+import { PluggableMap } from 'ol';
 import BaseLayer from 'ol/layer/Base';
-import Map from 'ol/Map';
-import { PanelData } from '../types';
-import { GrafanaTheme2 } from '../themes';
-import { PanelOptionsEditorBuilder } from '../utils';
 import { ReactNode } from 'react';
+
+import { EventBus } from '../events';
+import { GrafanaTheme2 } from '../themes';
+import { MatcherConfig, PanelData } from '../types';
+import { PanelOptionsEditorBuilder } from '../utils';
+import { RegistryItemWithOptions } from '../utils/Registry';
 
 /**
  * @alpha
@@ -49,7 +51,7 @@ export interface FrameGeometrySource {
  */
 export interface MapLayerOptions<TConfig = any> {
   type: string;
-  name?: string; // configured display name
+  name: string; // configured unique display name
 
   // Custom options depending on the type
   config?: TConfig;
@@ -57,19 +59,38 @@ export interface MapLayerOptions<TConfig = any> {
   // Common method to define geometry fields
   location?: FrameGeometrySource;
 
+  // Defines which data query refId is associated with the layer
+  filterData?: MatcherConfig;
+
   // Common properties:
   // https://openlayers.org/en/latest/apidoc/module-ol_layer_Base-BaseLayer.html
   // Layer opacity (0-1)
   opacity?: number;
+
+  // Check tooltip (defaults to true)
+  tooltip?: boolean;
 }
 
 /**
  * @alpha
  */
-export interface MapLayerHandler {
+export interface MapLayerHandler<TConfig = any> {
   init: () => BaseLayer;
+  /**
+   * The update function should only be implemented if the layer type makes use of query data
+   */
   update?: (data: PanelData) => void;
+
+  /** Optional callback to cleaup before getting removed */
+  dispose?: () => void;
+
+  /** return react node for the legend */
   legend?: ReactNode;
+
+  /**
+   * Show custom elements in the panel edit UI
+   */
+  registerOptionsUI?: (builder: PanelOptionsEditorBuilder<MapLayerOptions<TConfig>>) => void;
 }
 
 /**
@@ -89,18 +110,18 @@ export interface MapLayerRegistryItem<TConfig = MapLayerOptions> extends Registr
   showLocation?: boolean;
 
   /**
-   * Show transparency controls in UI (for non-basemaps)
+   * Hide transparency controls in UI
    */
-  showOpacity?: boolean;
+  hideOpacity?: boolean;
 
   /**
    * Function that configures transformation and returns a transformer
    * @param options
    */
-  create: (map: Map, options: MapLayerOptions<TConfig>, theme: GrafanaTheme2) => Promise<MapLayerHandler>;
-
-  /**
-   * Show custom elements in the panel edit UI
-   */
-  registerOptionsUI?: (builder: PanelOptionsEditorBuilder<MapLayerOptions<TConfig>>) => void;
+  create: (
+    map: PluggableMap,
+    options: MapLayerOptions<TConfig>,
+    eventBus: EventBus,
+    theme: GrafanaTheme2
+  ) => Promise<MapLayerHandler>;
 }

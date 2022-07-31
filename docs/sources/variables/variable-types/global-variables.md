@@ -1,9 +1,19 @@
-+++
-title = "Global variables"
-keywords = ["grafana", "templating", "documentation", "guide", "template", "variable", "global", "standard"]
-aliases = ["/docs/grafana/latest/variables/global-variables.md"]
-weight = 900
-+++
+---
+aliases:
+  - /docs/grafana/latest/variables/global-variables/
+  - /docs/grafana/latest/variables/variable-types/global-variables/
+keywords:
+  - grafana
+  - templating
+  - documentation
+  - guide
+  - template
+  - variable
+  - global
+  - standard
+title: Global variables
+weight: 900
+---
 
 # Global variables
 
@@ -15,11 +25,11 @@ Grafana has global built-in variables that can be used in expressions in the que
 
 This variable is the name of the current dashboard.
 
-## $**from and $**to
+## $\_\_from and $\_\_to
 
 Grafana has two built in time range variables: `$__from` and `$__to`. They are currently always interpolated as epoch milliseconds by default but you can control date formatting.
 
-> This special formatting syntax is only available in Grafan a 7.1.2+
+> This special formatting syntax is only available in Grafana 7.1.2+
 
 | Syntax                   | Example result           | Description                                                                                               |
 | ------------------------ | ------------------------ | --------------------------------------------------------------------------------------------------------- |
@@ -74,7 +84,7 @@ Currently only supported for Prometheus and Loki data sources. This variable rep
 
 ## $\_\_rate_interval
 
-Currently only supported for Prometheus data sources. The `$__rate_interval` variable is meant to be used in the rate function. Refer to [Prometheus query variables]({{< relref "../../datasources/prometheus.md">}}) for details.
+Currently only supported for Prometheus data sources. The `$__rate_interval` variable is meant to be used in the rate function. Refer to [Prometheus query variables]({{< relref "../../datasources/prometheus.md#using-__rate_interval">}}) for details.
 
 ## $timeFilter or $\_\_timeFilter
 

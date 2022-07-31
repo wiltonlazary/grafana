@@ -1,11 +1,14 @@
-import React, { useCallback } from 'react';
 import { css, cx } from '@emotion/css';
-import { VizLegendSeriesIcon } from './VizLegendSeriesIcon';
-import { VizLegendItem } from './types';
-import { VizLegendStatsList } from './VizLegendStatsList';
-import { useStyles } from '../../themes';
+import React, { useCallback } from 'react';
+
 import { GrafanaTheme } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
+
+import { useStyles } from '../../themes';
+
+import { VizLegendSeriesIcon } from './VizLegendSeriesIcon';
+import { VizLegendStatsList } from './VizLegendStatsList';
+import { VizLegendItem } from './types';
 
 export interface Props<T> {
   item: VizLegendItem<T>;
@@ -58,7 +61,7 @@ export const VizLegendListItem = <T extends unknown = any>({
 
   return (
     <div
-      className={cx(styles.itemWrapper, className)}
+      className={cx(styles.itemWrapper, item.disabled && styles.itemDisabled, className)}
       aria-label={selectors.components.VizLegend.seriesName(item.label)}
     >
       <VizLegendSeriesIcon seriesName={item.label} color={item.color} gradient={item.gradient} readonly={readonly} />
@@ -66,7 +69,7 @@ export const VizLegendListItem = <T extends unknown = any>({
         onMouseEnter={onMouseEnter}
         onMouseOut={onMouseOut}
         onClick={!readonly ? onClick : undefined}
-        className={cx(styles.label, item.disabled && styles.labelDisabled, !readonly && styles.clickable)}
+        className={cx(styles.label, !readonly && styles.clickable)}
       >
         {item.label}
       </div>
@@ -87,7 +90,7 @@ const getStyles = (theme: GrafanaTheme) => ({
     label: LegendClickabel;
     cursor: pointer;
   `,
-  labelDisabled: css`
+  itemDisabled: css`
     label: LegendLabelDisabled;
     color: ${theme.colors.linkDisabled};
   `,

@@ -1,6 +1,6 @@
-import React, { FC, useMemo } from 'react';
 import { css } from '@emotion/css';
-import { IconButton, Label, Select, stylesFactory, useTheme } from '@grafana/ui';
+import React, { FC, useMemo } from 'react';
+
 import {
   SelectableValue,
   getFrameDisplayName,
@@ -8,9 +8,10 @@ import {
   StandardEditorProps,
   getFieldDisplayName,
 } from '@grafana/data';
+import { IconButton, Label, Select, stylesFactory, useTheme } from '@grafana/ui';
 
-import { XYDimensionConfig, Options } from './types';
 import { getXYDimensions, isGraphable } from './dims';
+import { XYDimensionConfig, XYChartOptions } from './models.gen';
 
 interface XYInfo {
   numberFields: Array<SelectableValue<string>>;
@@ -18,7 +19,7 @@ interface XYInfo {
   yFields: Array<SelectableValue<boolean>>;
 }
 
-export const XYDimsEditor: FC<StandardEditorProps<XYDimensionConfig, any, Options>> = ({
+export const XYDimsEditor: FC<StandardEditorProps<XYDimensionConfig, any, XYChartOptions>> = ({
   value,
   onChange,
   context,
@@ -90,7 +91,6 @@ export const XYDimsEditor: FC<StandardEditorProps<XYDimensionConfig, any, Option
   return (
     <div>
       <Select
-        menuShouldPortal
         options={frameNames}
         value={frameNames.find((v) => v.value === value?.frame) ?? frameNames[0]}
         onChange={(v) => {
@@ -103,7 +103,6 @@ export const XYDimsEditor: FC<StandardEditorProps<XYDimensionConfig, any, Option
       <br />
       <Label>X Field</Label>
       <Select
-        menuShouldPortal
         options={info.numberFields}
         value={info.xAxis}
         onChange={(v) => {

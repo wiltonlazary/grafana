@@ -1,14 +1,19 @@
-import React from 'react';
-import { PanelModel } from 'app/features/dashboard/state';
+import React, { useEffect } from 'react';
+
+import { reportInteraction } from '@grafana/runtime/src';
 import { AddLibraryPanelContents } from 'app/features/library-panels/components/AddLibraryPanelModal/AddLibraryPanelModal';
 
-interface Props {
-  onDismiss?: () => void;
-  panel?: PanelModel;
+import { ShareModalTabProps } from './types';
+
+interface Props extends ShareModalTabProps {
   initialFolderId?: number;
 }
 
 export const ShareLibraryPanel = ({ panel, initialFolderId, onDismiss }: Props) => {
+  useEffect(() => {
+    reportInteraction('grafana_dashboards_library_panel_share_viewed');
+  }, []);
+
   if (!panel) {
     return null;
   }

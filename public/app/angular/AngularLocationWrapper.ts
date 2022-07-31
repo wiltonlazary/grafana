@@ -1,5 +1,5 @@
-import { locationSearchToObject, locationService, navigationLogger } from '@grafana/runtime';
 import { deprecationWarning, urlUtil } from '@grafana/data';
+import { locationSearchToObject, locationService, navigationLogger } from '@grafana/runtime';
 
 // Ref: https://github.com/angular/angular.js/blob/ae8e903edf88a83fedd116ae02c0628bf72b150c/src/ng/location.js#L5
 const DEFAULT_PORTS: Record<string, number> = { http: 80, https: 443, ftp: 21 };
@@ -35,7 +35,7 @@ export class AngularLocationWrapper {
     navigationLogger('AngularLocationWrapper', false, 'Angular compat layer: hash');
 
     if (!newHash) {
-      return locationService.getLocation().hash.substr(1);
+      return locationService.getLocation().hash.slice(1);
     } else {
       throw new Error('AngularLocationWrapper method not implemented.');
     }
@@ -135,7 +135,6 @@ export class AngularLocationWrapper {
       } else if (newUrl.startsWith('?')) {
         locationService.push({ ...locationService.getLocation(), search: newUrl });
       } else if (newUrl.trim().length === 0) {
-        console.log('pushing emptu');
         locationService.push('/');
       } else {
         locationService.push(newUrl);

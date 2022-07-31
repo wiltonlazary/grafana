@@ -1,4 +1,6 @@
+import { isNumber } from 'lodash';
 import React, { PureComponent } from 'react';
+
 import {
   DisplayValueAlignmentFactors,
   FieldDisplay,
@@ -8,15 +10,15 @@ import {
   FieldConfig,
   DisplayProcessor,
   DisplayValue,
+  VizOrientation,
 } from '@grafana/data';
 import { BarGauge, DataLinksContextMenu, VizRepeater, VizRepeaterRenderValueProps } from '@grafana/ui';
-
-import { config } from 'app/core/config';
-import { BarGaugeOptions } from './types';
 import { DataLinksContextMenuApi } from '@grafana/ui/src/components/DataLinks/DataLinksContextMenu';
-import { isNumber } from 'lodash';
+import { config } from 'app/core/config';
 
-export class BarGaugePanel extends PureComponent<PanelProps<BarGaugeOptions>> {
+import { PanelOptions } from './models.gen';
+
+export class BarGaugePanel extends PureComponent<BarGaugePanelProps> {
   renderComponent = (
     valueProps: VizRepeaterRenderValueProps<FieldDisplay, DisplayValueAlignmentFactors>,
     menuProps: DataLinksContextMenuApi
@@ -28,7 +30,7 @@ export class BarGaugePanel extends PureComponent<PanelProps<BarGaugeOptions>> {
 
     let processor: DisplayProcessor | undefined = undefined;
     if (view && isNumber(colIndex)) {
-      processor = view!.getFieldDisplayProcessor(colIndex as number);
+      processor = view.getFieldDisplayProcessor(colIndex);
     }
 
     return (
@@ -52,18 +54,17 @@ export class BarGaugePanel extends PureComponent<PanelProps<BarGaugeOptions>> {
   };
 
   renderValue = (valueProps: VizRepeaterRenderValueProps<FieldDisplay, DisplayValueAlignmentFactors>): JSX.Element => {
-    const { value } = valueProps;
+    const { value, orientation } = valueProps;
     const { hasLinks, getLinks } = value;
 
     if (hasLinks && getLinks) {
       return (
-        <DataLinksContextMenu links={getLinks} config={value.field}>
-          {(api) => {
-            return this.renderComponent(valueProps, api);
-          }}
-        </DataLinksContextMenu>
+        <div style={{ width: '100%', display: orientation === VizOrientation.Vertical ? 'flex' : 'initial' }}>
+          <DataLinksContextMenu links={getLinks}>{(api) => this.renderComponent(valueProps, api)}</DataLinksContextMenu>
+        </div>
       );
     }
+
     return this.renderComponent(valueProps, {});
   };
 
@@ -100,13 +101,15 @@ export class BarGaugePanel extends PureComponent<PanelProps<BarGaugeOptions>> {
         renderCounter={renderCounter}
         width={width}
         height={height}
-        minVizHeight={10}
+        minVizWidth={options.minVizWidth}
+        minVizHeight={options.minVizHeight}
         itemSpacing={this.getItemSpacing()}
         orientation={options.orientation}
       />
     );
   }
 }
+export type BarGaugePanelProps = PanelProps<PanelOptions>;
 
 export function clearNameForSingleSeries(count: number, field: FieldConfig<any>, display: DisplayValue): DisplayValue {
   if (count === 1 && !field.displayName) {

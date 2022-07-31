@@ -1,6 +1,8 @@
+import { InternalTimeZones, SelectableValue } from '@grafana/data';
+
 import { BucketsConfiguration } from '../../../types';
+
 import { defaultFilter } from './SettingsEditor/FiltersSettingsEditor/utils';
-import { SelectableValue } from '@grafana/data';
 
 export const bucketAggregationConfig: BucketsConfiguration = {
   terms: {
@@ -34,6 +36,7 @@ export const bucketAggregationConfig: BucketsConfiguration = {
       interval: 'auto',
       min_doc_count: '0',
       trimEdges: '0',
+      timeZone: InternalTimeZones.utc,
     },
   },
   histogram: {

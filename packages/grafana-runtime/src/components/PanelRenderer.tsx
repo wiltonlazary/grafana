@@ -1,4 +1,5 @@
 import React from 'react';
+
 import { AbsoluteTimeRange, FieldConfigSource, PanelData } from '@grafana/data';
 
 /**
@@ -10,13 +11,14 @@ import { AbsoluteTimeRange, FieldConfigSource, PanelData } from '@grafana/data';
  * @internal
  */
 export interface PanelRendererProps<P extends object = any, F extends object = any> {
-  data: PanelData;
+  data?: PanelData;
   pluginId: string;
   title: string;
-  options?: P;
+  options?: Partial<P>;
   onOptionsChange?: (options: P) => void;
+  onFieldConfigChange?: (config: FieldConfigSource<F>) => void;
   onChangeTimeRange?: (timeRange: AbsoluteTimeRange) => void;
-  fieldConfig?: FieldConfigSource<F>;
+  fieldConfig?: FieldConfigSource<Partial<F>>;
   timeZone?: string;
   width: number;
   height: number;

@@ -2,22 +2,14 @@
 
 This guide helps you get started developing Grafana.
 
-Before you begin, you might want to read [How to contribute to Grafana as a junior dev](https://medium.com/@ivanahuckova/how-to-contribute-to-grafana-as-junior-dev-c01fe3064502) by [Ivana Huckova](https://medium.com/@ivanahuckova).
-
 ## Dependencies
 
 Make sure you have the following dependencies installed before setting up your developer environment:
 
 - [Git](https://git-scm.com/)
 - [Go](https://golang.org/dl/) (see [go.mod](../go.mod#L3) for minimum required version)
-
-Additionally you'll need:
-
-- [Node.js](https://nodejs.org) (see `volta.node` property in [package.json](../package.json) for the correct version).
-- [Yarn](https://yarnpkg.com) (see `volta.yarn` property in [package.json](../package.json) for the correct version).
-
-We recommend using [Volta](https://github.com/volta-cli/volta) to manage your JS toolchain.
-Refer to the [Volta Getting Started Guide](https://docs.volta.sh/guide/getting-started) for setup instructions for your operating system.
+- [Node.js (Long Term Support)](https://nodejs.org)
+- [Yarn](https://yarnpkg.com)
 
 ### macOS
 
@@ -26,6 +18,8 @@ We recommend using [Homebrew](https://brew.sh/) for installing any missing depen
 ```
 brew install git
 brew install go
+brew install node@16
+npm install -g yarn
 ```
 
 ### Windows
@@ -43,6 +37,14 @@ For alternative ways of cloning the Grafana repository, please refer to [GitHub'
 
 **Warning:** Do not use `go get` to download Grafana. Recent versions of Go have added behavior which isn't compatible with the way the Grafana repository is structured.
 
+### Configure Editors
+
+For some IDEs, additional configuration may be needed for Typescript to work with [Yarn plug'n'play](https://yarnpkg.com/features/pnp).
+For [VSCode](https://yarnpkg.com/getting-started/editor-sdks#vscode) and [Vim](https://yarnpkg.com/getting-started/editor-sdks#vim),
+it's as easy as running `yarn dlx @yarnpkg/sdks vscode` or `yarn dlx @yarnpkg/sdks vim`, respectively.
+
+More information can be found [here](https://yarnpkg.com/getting-started/editor-sdks).
+
 ## Build Grafana
 
 Grafana consists of two components; the _frontend_, and the _backend_.
@@ -52,8 +54,10 @@ Grafana consists of two components; the _frontend_, and the _backend_.
 Before we can build the frontend assets, we need to install the dependencies:
 
 ```
-yarn install --pure-lockfile
+yarn install --immutable
 ```
+
+> Troubleshooting: if you get the error `The remote archive doesn't match the expected checksum` for a dependency pulled from a link (e.g. `"tether-drop": "https://github.com/torkelo/drop"`): this is a temporary mismatch. To work around it (while someone corrects the issue), you can prefix your `yarn install --immutable` command with [`YARN_CHECKSUM_BEHAVIOR=update`](https://yarnpkg.com/advanced/error-codes#yn0018---cache_checksum_mismatch)
 
 After the command has finished, we can start building our source code:
 
@@ -63,7 +67,9 @@ yarn start
 
 Once `yarn start` has built the assets, it will continue to do so whenever any of the files change. This means you don't have to manually build the assets every time you change the code.
 
-Next, we'll build the web server that will serve the frontend assets we just built.
+> Troubleshooting: if your first build works, but after pulling updates you see unexpected errors in the "Type-checking in progress..." stage, these can be caused by the [tsbuildinfo cache supporting incremental builds](https://www.typescriptlang.org/tsconfig#incremental). You can `rm tsconfig.tsbuildinfo` and re-try.
+
+Next, we'll build & run the web server that will serve the frontend assets we just built.
 
 ### Backend
 
@@ -85,7 +91,23 @@ When you log in for the first time, Grafana asks you to change your password.
 
 The Grafana backend includes SQLite which requires GCC to compile. So in order to compile Grafana on Windows you need to install GCC. We recommend [TDM-GCC](http://tdm-gcc.tdragon.net/download). Eventually, if you use [Scoop](https://scoop.sh), you can install GCC through that.
 
-You can simply build the back-end as follows: `go run build.go build`. The Grafana binaries will be in bin\\windows-amd64.
+You can build the back-end as follows:
+
+1. Follow the [instructions](https://github.com/google/wire#installing) to install the Wire tool.
+2. Generate code using Wire:
+
+```
+# Default Wire tool install path: $GOPATH/bin/wire.exe
+<Wire tool install path> gen -tags oss ./pkg/server ./pkg/cmd/grafana-cli/runner
+```
+
+3. Build the Grafana binaries:
+
+```
+go run build.go build
+```
+
+The Grafana binaries will be in bin\\windows-amd64.
 Alternately, if you wish to use the `make` command, install [Make for Windows](http://gnuwin32.sourceforge.net/packages/make.htm) and use it in a Unix shell (f.ex. Git Bash).
 
 ## Test Grafana
@@ -116,6 +138,26 @@ Running the backend tests on Windows currently needs some tweaking, so use the b
 go run build.go test
 ```
 
+### Run SQLLite, PostgreSQL and MySQL integration tests
+
+By default grafana runs SQLite, to run test with SQLite
+
+```bash
+go test -covermode=atomic -tags=integration ./pkg/...
+```
+
+To run PostgreSQL and MySQL integration tests locally, you need to start the docker blocks for MySQL and/or PostgreSQL test data sources by running `make devenv sources=mysql_tests,postgres_tests`. When your test data sources are running, you can execute integration tests by running:
+
+```bash
+GRAFANA_TEST_DB=mysql go test -covermode=atomic -tags=integration ./pkg/...
+```
+
+and/or
+
+```bash
+GRAFANA_TEST_DB=postgres go test -covermode=atomic -tags=integration ./pkg/...
+```
+
 ### Run end-to-end tests
 
 The end to end tests in Grafana use [Cypress](https://www.cypress.io/) to run automated scripts in a headless Chromium browser. Read more about our [e2e framework](/contribute/style-guides/e2e.md).
@@ -126,19 +168,19 @@ To run the tests:
 yarn e2e
 ```
 
-By default, the end-to-end tests starts a Grafana instance listening on `localhost:3001`. To use a specific URL, set the `BASE_URL` environment variable:
+By default, the end-to-end tests start a Grafana instance listening on `localhost:3001`. To use a different URL, set the `BASE_URL` environment variable:
 
 ```
 BASE_URL=http://localhost:3333 yarn e2e
 ```
 
-To follow the tests in the browser while they're running, use the `yarn e2e:debug`.
+To follow all tests in the browser while they're running, use `yarn e2e:debug`
 
 ```
 yarn e2e:debug
 ```
 
-If you want to pick a test first, use the `yarn e2e:dev`, to pick a test and follow the test in the browser while it runs.
+To choose a single test to follow in the browser as it runs, use `yarn e2e:dev`
 
 ```
 yarn e2e:dev
@@ -158,7 +200,7 @@ app_mode = development
 
 ### Add data sources
 
-By now, you should be able to build and test a change you've made to the Grafana source code. In most cases, you need to add at least one data source to verify the change.
+By now, you should be able to build and test a change you've made to the Grafana source code. In most cases, you'll need to add at least one data source to verify the change.
 
 To set up data sources for your development environment, go to the [devenv](/devenv) directory in the Grafana repository:
 
@@ -192,11 +234,6 @@ make build-docker-full
 
 The resulting image will be tagged as grafana/grafana:dev.
 
-> **Note:** If you've already set up a local development environment, and you're running a `linux/amd64` machine, you can speed up building the Docker image:
-
-1. Build the frontend: `go run build.go build-frontend`.
-1. Build the Docker image: `make build-docker-dev`.
-
 **Note:** If you are using Docker for macOS, be sure to set the memory limit to be larger than 2 GiB. Otherwise, `grunt build` may fail. The memory limit settings are available under **Docker Desktop** -> **Preferences** -> **Advanced**.
 
 ## Troubleshooting
@@ -216,7 +253,7 @@ ulimit -a
 To change the number of open files allowed, run:
 
 ```
-ulimit -S -n 2048
+ulimit -S -n 4096
 ```
 
 The number of files needed may be different on your environment. To determine the number of open files needed by `make run`, run:
@@ -252,5 +289,4 @@ If that happens to you, chances are you've already set a lower limit and your sh
 
 - Read our [style guides](/contribute/style-guides).
 - Learn how to [Create a pull request](/contribute/create-pull-request.md).
-- Read [How to contribute to Grafana as a junior dev](https://medium.com/@ivanahuckova/how-to-contribute-to-grafana-as-junior-dev-c01fe3064502) by [Ivana Huckova](https://medium.com/@ivanahuckova).
 - Read about the [architecture](architecture).
